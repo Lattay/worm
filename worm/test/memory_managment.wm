@@ -1,0 +1,14 @@
+@worm
+def repeat(s: str, n: int) -> str: int
+    l: int = len(s)
+    new_s: str = str.new(l * n)
+    for i in range(n):
+        strcpyn(new_s[l * i:], s, n)
+    return new_s
+
+
+@worm.entry
+def main():
+    s: str = repeat("Hello !\n", 3)
+    printf("%s", s)
+    del s

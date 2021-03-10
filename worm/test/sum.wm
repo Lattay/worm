@@ -1,0 +1,14 @@
+Result = Sum(ok=float, error=str)
+
+with worm.scope(ok=Result.ok, error=Result.error):
+    @worm
+    def sqrt(a: float) -> Result:
+        if a >= 0:
+            a_n = a
+            c_n = a - 1
+            while abs(a_n * a_n - a) > 1e-10:
+                a_n = a_n * (1 - 0.5 * c_n)
+                c_n = 0.25 * c_n * c_n * (c_n - 3)
+            return ok(a_n)
+        else:
+            return error("cannot take square root of a negative number.")

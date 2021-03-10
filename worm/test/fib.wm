@@ -1,0 +1,15 @@
+@worm
+def fib(a: int, b: int, n: int = 1) -> int:
+    while n > 0:
+        c = a
+        a = a + b
+        b = c
+        n -= 1
+    return a
+
+@worm.entry
+def main():
+    print(fib(0, 1, 8))
+    print(fib(0, 1, 10))
+
+print(worm.dump_source())

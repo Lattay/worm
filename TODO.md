@@ -1,0 +1,67 @@
+- [X] produce C source for a helloworld
+- [X] resolve scope with hygiene
+- [X] implement hygienic inlined blocks
+- [X] check types
+- [X] infer types of new variables (easy)
+- [ ] implement compounds types
+- [ ] implement more complex/interesting macros
+- [ ] implement pattern matching
+- [ ] infer return type of functions (not so easy)
+- [ ] optimise the AST
+- [ ] compile the C source
+- [ ] make worm package pip compatibles
+- [ ] document
+- [ ] implement standard lib
+    - [ ] random
+        - [ ] seed
+        - [ ] rand
+        - [ ] randint
+        - [ ] randrange
+        - [ ] gauss
+        - [ ] exp
+    - [ ] math module
+        - [ ] log
+        - [ ] floor, ceil
+        - [ ] sin, cos, tan
+        - [ ] asin, acos, atan, atan2
+        - [ ] exp, expm1
+        - [ ] sqrt
+        - [ ] sq
+        - [ ] pow
+        - [ ] erf
+        - [ ] degrees, radians
+        - [ ] ifinf, isnan
+        - [ ] pi, e
+        - [ ] fabs
+        - [ ] frexp
+        - [ ] lcm
+        - [ ] gcd
+        - [ ] more ...
+    - [ ] string module
+    - [ ] file IO
+    - [ ] array
+    - [ ] os
+    - [ ] time
+    - [ ] list module
+    - [ ] unicode module
+    - [ ] hashing module(s)
+    - [ ] map module (hash version)
+    - [ ] map module (tree version)
+    - [ ] regex (PCRE ?)
+    - [ ] base64
+    - [ ] queue, dequeue, stack
+    - [ ] iterators ?
+    - [ ] command line arguments parser
+    - [ ] serialization (json+msgpack ?)
+    - [ ] multiprocessing
+    - [ ] threading
+    - [ ] subprocess
+    - [ ] complex (complex math)
+    - [ ] parser ?
+    - [ ] sqlite3 ?
+    - [ ] readline ?
+    - [ ] 
+    - [ ] GUI ?
+    - [ ] netrc ? csv ?
+    - [ ] GC ?
+    - [ ] async

@@ -1,0 +1,22 @@
+'''#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+double v1_pow(double, int64_t);
+void main(){
+printf('%f\n', v1_pow(1.5, 4));
+}
+double v1_pow(double v2_a, int64_t v3_n){
+v4_result = 1.0;
+v5_partial = v2_a;
+while(((v3_n > 0))){
+if((((v3_n % 2) == 1))){
+v4_result = (v4_result * v5_partial);
+} else {
+
+}
+v5_partial = (v5_partial * v5_partial);
+v3_n = (v3_n // 2);
+}
+return v4_result;
+}
+'''

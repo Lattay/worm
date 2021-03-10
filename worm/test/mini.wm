@@ -1,0 +1,6 @@
+import sys
+
+@worm.entry
+def b():
+    n: int = 89
+    printf("%d\n", n)

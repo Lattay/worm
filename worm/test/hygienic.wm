@@ -1,0 +1,28 @@
+'''#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+void main(){
+v1_a = 1;
+v2_b = 3;
+v3_c = 4;
+v4_c = v2_b;
+v2_b = v3_c;
+v3_c = v4_c;
+printf('%d %d %d\\n', v1_a, v2_b, v3_c);
+}'''
+
+@worm.block
+def swap(a, b):
+    c = a
+    a = b
+    b = c
+
+@worm.entry
+def f():
+    a: int = 1
+    b: int = 3
+    c: int = 4
+    swap(a=b, b=c)
+    printf("%d %d %d\n", a, b, c)  # print 1 4 3
+
+import sys
