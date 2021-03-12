@@ -82,9 +82,13 @@ class ValidateMain(WormVisitor):
     def visit_return(self, node):
         if self.returns.deref() == void:
             if node.value is not None:
-                raise WormTypeError('The entry point has a non void return.', at=node.src_pos)
+                raise WormTypeError(
+                    "The entry point has a non void return.", at=node.src_pos
+                )
         elif node.value.type.deref() != int:
-            raise WormTypeError('The entry point has a non int return.', at=node.src_pos)
+            raise WormTypeError(
+                "The entry point has a non int return.", at=node.src_pos
+            )
 
 
 class TreatBlocks(WormVisitor):
@@ -99,7 +103,7 @@ class TreatBlocks(WormVisitor):
         return None
 
     def visit_funcDef(self, node):
-        if hasattr(node, '_scope'):
+        if hasattr(node, "_scope"):
             self.scope.extend(node._scope)
 
         return super().visit_funcDef(node)
@@ -116,7 +120,7 @@ class TreatBlocks(WormVisitor):
     def visit_call(self, node):
         if isinstance(node.func, WName):
             bind = self.lookup(node.func.name)
-            if bind and hasattr(bind, '_wrapped_block'):
+            if bind and hasattr(bind, "_wrapped_block"):
                 return bind(*node.args, **node.kwargs)
         return super().visit_call(node)
 
@@ -216,12 +220,12 @@ class Renaming(WormVisitor):
 
     def visit_funcDef(self, node):
         if self.stop_at_proto:
-            assert node.name != '__main'
+            assert node.name != "__main"
             node.name = self.add_to_scope(node.name)
             return node
 
         if node.name == "__main":
-            name = 'main'
+            name = "main"
         else:
             name = node.name
 
@@ -249,12 +253,12 @@ class Renaming(WormVisitor):
                 if isinstance(ext_val, WName):
                     name = self.in_scope(ext_val.name)
                     if not name:
-                        raise WormBindingError(f'Injected name {ext_val.name} is unbound.', at=node.src_pos)
+                        raise WormBindingError(
+                            f"Injected name {ext_val.name} is unbound.", at=node.src_pos
+                        )
                     self.add_to_scope(local_name, name)
                 elif isinstance(ext_val, WExpr):
-                    prelude.append(
-                        WAssign([WStoreName(local_name)], ext_val)
-                    )
+                    prelude.append(WAssign([WStoreName(local_name)], ext_val))
 
             return WBlock(map(self.visit, prelude + node.statements)).copy_common(node)
 
@@ -268,7 +272,9 @@ class Renaming(WormVisitor):
     def visit_name(self, node):
         renamed = self.in_scope(node.name)
         if not renamed:
-            raise WormBindingError(f"Unbound symbol {node.name}. {self.scope}", at=node.src_pos)
+            raise WormBindingError(
+                f"Unbound symbol {node.name}. {self.scope}", at=node.src_pos
+            )
         return WName(renamed).copy_common(node)
 
     def visit_storeName(self, node):
@@ -300,7 +306,11 @@ class MakeCSource(WormVisitor):
         return repr(node.value)
 
     def visit_array(self, node):
-        raise NotImplementedError()
+        return (
+            f"{{.length={len(node.elements)}, .elements={{"
+            + ", ".join(map(self.visit, node.elements))
+            + "}}"
+        )
 
     def visit_tuple(self, node):
         raise NotImplementedError()

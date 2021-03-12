@@ -54,5 +54,5 @@ def test_fractions():
     remove_hook(k)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_fractions()

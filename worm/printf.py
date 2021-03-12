@@ -8,7 +8,7 @@ def parse_format(string):
     n = len(string)
     last = 0
     while i < n:
-        if string[i] == '%':
+        if string[i] == "%":
             elements.append(string[last:i])
             slot, last = parse_slot(string, i)
             elements.append(slot)
@@ -19,11 +19,13 @@ def parse_format(string):
     actual_params = []
     for p in elements:
         if isinstance(p, Slot):
-            if p.prec and p.prec[0] == 'arg':
+            if p.prec and p.prec[0] == "arg":
                 if p.prec[1] > 0:
-                    raise NotImplementedError('I don\'t even understand what this is supposed to do...')
+                    raise NotImplementedError(
+                        "I don't even understand what this is supposed to do..."
+                    )
                 else:
-                    actual_params.append('d')
+                    actual_params.append("d")
             actual_params.append(p)
 
     return elements, actual_params
@@ -31,11 +33,11 @@ def parse_format(string):
 
 def parse_slot(string, start):
     n = len(string)
-    assert string[start] == '%'
+    assert string[start] == "%"
     if start + 1 >= n:
-        raise FormatError('Incomplete format specifier.')
-    elif string[start + 1] == '%':
-        return '%', start + 2
+        raise FormatError("Incomplete format specifier.")
+    elif string[start + 1] == "%":
+        return "%", start + 2
     else:
         try:
             flag, after = parse_flags(string, start + 1)
@@ -47,14 +49,14 @@ def parse_slot(string, start):
 
         spec, after = parse_spec(string, after)
         if not spec:
-            raise FormatError(f'Invalid format string: {string[start:after]}')
+            raise FormatError(f"Invalid format string: {string[start:after]}")
         return Slot(spec, flag, minwidth, prec, lenmod), after
 
 
 def parse_flags(string, start):
     flags = set()
     i = start
-    while string[i] in {'-', '#', '0', 'I', ' ', '+', "'"}:
+    while string[i] in {"-", "#", "0", "I", " ", "+", "'"}:
         flags.add(string[i])
         i += 1
     return flags or None, i
@@ -72,44 +74,63 @@ def parse_minwidth(string, start):
 
 
 def parse_prec(string, start):
-    if string[start] == '.':
-        if string[start + 1] == '*':
+    if string[start] == ".":
+        if string[start + 1] == "*":
             if string[start + 2].isdecimal():
                 start_dec = start + 2
                 i = start_dec
                 while string[i].isdecimal():
                     i += 1
 
-                if string[i] != '$':
-                    raise FormatError('Invalid precision format.')
+                if string[i] != "$":
+                    raise FormatError("Invalid precision format.")
 
-                return ('arg', int(string[start_dec:i])), i + 1
+                return ("arg", int(string[start_dec:i])), i + 1
             else:
-                return ('arg', -1), start + 2
+                return ("arg", -1), start + 2
         else:
             start_dec = start + 1
             i = start_dec
             while string[i].isdecimal():
                 i += 1
-            return ('lit', int(string[start_dec:i])), i
+            return ("lit", int(string[start_dec:i])), i
     else:
         return None, start
 
 
 def parse_lenmod(string, start):
-    if string[start] in {'h', 'L', 't', 'z', 'l', 'j'}:
-        if string[start + 1] == string[start] and string[start] in {'h', 'l'}:
-            return string[start:start + 2], start + 2
+    if string[start] in {"h", "L", "t", "z", "l", "j"}:
+        if string[start + 1] == string[start] and string[start] in {"h", "l"}:
+            return string[start : start + 2], start + 2
         else:
-            return string[start:start + 1], start + 1
+            return string[start : start + 1], start + 1
     else:
         return None, start
 
 
 def parse_spec(string, start):
-    if string[start] == '%':
-        return '%', start + 1
-    elif string[start] in {'E', 'i', 'o', 'F', 'u', 'A', 'e', 'X', 'a', 'n', 'G', 'd', 'p', 'f', 'g', 's', 'x', 'c'}:
+    if string[start] == "%":
+        return "%", start + 1
+    elif string[start] in {
+        "E",
+        "i",
+        "o",
+        "F",
+        "u",
+        "A",
+        "e",
+        "X",
+        "a",
+        "n",
+        "G",
+        "d",
+        "p",
+        "f",
+        "g",
+        "s",
+        "x",
+        "c",
+    }:
         return string[start], start + 1
     else:
         return None, start + 1

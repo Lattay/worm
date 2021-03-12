@@ -7,10 +7,11 @@ from .wast import WName, WStoreName, WConstant, Ref, merge_types
 
 
 class AnnotateSymbols(WormVisitor):
-    '''
+    """
     This visitor will built a mapping of symbols and there types and put it into toplevel node,
     including functions.
-    '''
+    """
+
     def __init__(self, prelude):
         self.symbol_table = {**prelude}
 
@@ -22,7 +23,9 @@ class AnnotateSymbols(WormVisitor):
     def visit_funcDef(self, node):
         for arg in node.args:
             self.symbol_table[arg.name] = Ref(arg.type)
-        self.symbol_table[node.name] = Ref(FunctionPrototype(node.returns, *(arg.type for arg in node.args)))
+        self.symbol_table[node.name] = Ref(
+            FunctionPrototype(node.returns, *(arg.type for arg in node.args))
+        )
         return super().visit_funcDef(node)
 
     def visit_assign(self, node):
@@ -35,17 +38,20 @@ class AnnotateSymbols(WormVisitor):
                         node.type = Missing(node.src_pos)
                     self.symbol_table[name] = Ref(node.type)
             else:
-                raise NotImplementedError(f'Assignement to complex target: expected {WStoreName} but got {type(target)}.')
+                raise NotImplementedError(
+                    f"Assignement to complex target: expected {WStoreName} but got {type(target)}."
+                )
         else:
-            raise NotImplementedError('Multiple targets in assignment')
+            raise NotImplementedError("Multiple targets in assignment")
         return super().visit_assign(node)
 
 
 class PropagateAndCheckTypes(WormVisitor):
-    '''
+    """
     This visitor will check for all nodes where types should match.
     (ex: both side of an assignment, parameters to a function call...)
-    '''
+    """
+
     def __init__(self, prelude):
         self.globals = prelude
         self.current_function_return = []
@@ -66,7 +72,7 @@ class PropagateAndCheckTypes(WormVisitor):
             if node.type.deref() is not None:
                 node.type = Array[node.elements[0].type]
             else:
-                raise WormTypeError('Non homogeneous array.', at=node.src_pos)
+                raise WormTypeError("Non homogeneous array.", at=node.src_pos)
         else:
             node.type = Array[None]
 
@@ -86,7 +92,12 @@ class PropagateAndCheckTypes(WormVisitor):
         node.left = self.visit(node.left)
         node.right = self.visit(node.right)
         if node.left.type.deref() != node.right.type.deref():
-            raise WormTypeError('Incompatible types in binary operation.', at=node.src_pos, expect=node.left.type, got=node.right.type)
+            raise WormTypeError(
+                "Incompatible types in binary operation.",
+                at=node.src_pos,
+                expect=node.left.type,
+                got=node.right.type,
+            )
         node.left.type.ref(node.right.type)
         node.type = node.right.type
         return node
@@ -95,7 +106,9 @@ class PropagateAndCheckTypes(WormVisitor):
         # FIXME take operator overloading in account
         node.values = list(map(self.visit, node.values))
         if any(val.type.deref() != bool for val in node.values):
-            raise WormTypeError('Incompatible types in boolean operation.', at=node.src_pos)
+            raise WormTypeError(
+                "Incompatible types in boolean operation.", at=node.src_pos
+            )
         node.type = bool
         return node
 
@@ -109,31 +122,43 @@ class PropagateAndCheckTypes(WormVisitor):
         node.body = self.visit(node.body)
         node.orelse = self.visit(node.orelse)
         if node.body.type.deref() != node.orelse.type.deref():
-            raise WormTypeError('Incompatible types in if-expr', at=node.src_pos, expect=node.body.type, got=node.orelse.type)
+            raise WormTypeError(
+                "Incompatible types in if-expr",
+                at=node.src_pos,
+                expect=node.body.type,
+                got=node.orelse.type,
+            )
         node.test = self.visit(node.test)
         node.body.type = node.orelse.type
         node.type = node.body.type
         return node
 
     def visit_getAttr(self, node):
-        raise NotImplementedError('Type of attribute')
+        raise NotImplementedError("Type of attribute")
 
     def visit_getItem(self, node):
-        raise NotImplementedError('Type of item')
+        raise NotImplementedError("Type of item")
 
     def visit_slice(self, node):
-        raise NotImplementedError('Type of slice')
+        raise NotImplementedError("Type of slice")
 
     def visit_assign(self, node):
         node.value = self.visit(node.value)
         if len(node.targets) != 1:
-            raise NotImplementedError('Multiple target')
+            raise NotImplementedError("Multiple target")
         target = node.targets[0]
         if not isinstance(target, WStoreName):
-            raise NotImplementedError(f'Assignement to complex target: expected {WStoreName} but got {type(target)}.')
+            raise NotImplementedError(
+                f"Assignement to complex target: expected {WStoreName} but got {type(target)}."
+            )
 
         if node.value.type.deref() != self.symbol_table[target.name].deref():
-            raise WormTypeError('Incompatible type in assignment.', at=node.src_pos, expect=self.symbol_table[target.name], got=node.value.type)
+            raise WormTypeError(
+                "Incompatible type in assignment.",
+                at=node.src_pos,
+                expect=self.symbol_table[target.name],
+                got=node.value.type,
+            )
 
         self.symbol_table[target.name] = node.value.type
 
@@ -148,13 +173,18 @@ class PropagateAndCheckTypes(WormVisitor):
     def visit_return(self, node):
         node.value = self.visit(node.value)
         if node.value.type.deref() != self.current_function_return[-1].deref():
-            raise WormTypeError('Incompatible type returned.', at=node.src_pos, expect=self.current_function_return[-1], got=node.value.type)
+            raise WormTypeError(
+                "Incompatible type returned.",
+                at=node.src_pos,
+                expect=self.current_function_return[-1],
+                got=node.value.type,
+            )
         self.current_function_return[-1] = node.value.type
         return node
 
     def visit_call(self, node):
         if not isinstance(node.func, WName):
-            raise NotImplementedError('Calling an expression')
+            raise NotImplementedError("Calling an expression")
         proto = self.symbol_table[node.func.name].deref()
 
         node.args = list(map(self.visit, node.args))
@@ -163,7 +193,10 @@ class PropagateAndCheckTypes(WormVisitor):
         # FIXME funcdef does not support keywords so I don't implement them here yet
         if not proto.check_args(*node.args):
             # FIXME how to point to the faulty parameter ?
-            raise WormTypeError(f'Incompatible argument type in call: {", ".join(str(arg.type) for arg in node.args)}', at=node.src_pos)
+            raise WormTypeError(
+                f'Incompatible argument type in call: {", ".join(str(arg.type) for arg in node.args)}',
+                at=node.src_pos,
+            )
 
         node.type = proto.returns
         return node
@@ -201,11 +234,12 @@ def check_type(expected, instance):
 
 
 class Missing(SimpleType):
-    '''
+    """
     Special class for the any type
-    '''
+    """
+
     def __init__(self, at):
-        super().__init__('missing')
+        super().__init__("missing")
         self.at = at
 
     def __eq__(self, other):
@@ -215,4 +249,4 @@ class Missing(SimpleType):
         return False
 
     def to_c(self):
-        raise WormTypeError('Missing type information', at=self.at)
+        raise WormTypeError("Missing type information", at=self.at)

@@ -64,12 +64,16 @@ class WormContext:
         the class/function name.
         """
         if isinstance(node, WFuncDef):
-            assert not injected, "worm.add does not accept keyword arguments with function definition parameter."
+            assert (
+                not injected
+            ), "worm.add does not accept keyword arguments with function definition parameter."
             self.add_to_scope(node.name, node)
             self._save_scope(node)
             self.functions.add(node)
         elif isinstance(node, WClass):
-            assert not injected, "worm.add does not accept keyword arguments with class definition parameter."
+            assert (
+                not injected
+            ), "worm.add does not accept keyword arguments with class definition parameter."
             self.add_to_scope(node.name, node)
             self._save_scope(node)
             self.classes.add(node)

@@ -22,12 +22,7 @@ class CustomMetaFinder(MetaPathFinder):
     is to ensure that our custom loader, which does the code transformations,
     is used."""
 
-    def __init__(
-        self,
-        transform_ast=None,
-        extensions=None,
-        debug=False
-    ):
+    def __init__(self, transform_ast=None, extensions=None, debug=False):
         self.transform_ast = transform_ast
         self.extensions = extensions or [".py"]
         self.debug = debug
@@ -66,12 +61,7 @@ class CustomMetaFinder(MetaPathFinder):
 class CustomLoader(Loader):
     """A custom loader which will transform the source prior to its execution"""
 
-    def __init__(
-        self,
-        filename,
-        transform_ast,
-        debug=False
-    ):
+    def __init__(self, filename, transform_ast, debug=False):
         self.filename = filename
         self.transform_ast = transform_ast
         self.debug = debug
@@ -104,9 +94,7 @@ def create_hook(transform_ast, extensions, hook_name=None, debug=False):
     does so for the interactive console.
     """
     hook = CustomMetaFinder(
-        extensions=extensions,
-        transform_ast=transform_ast,
-        debug=debug
+        extensions=extensions, transform_ast=transform_ast, debug=debug
     )
 
     sys.meta_path.append(hook)

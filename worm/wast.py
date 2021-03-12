@@ -335,13 +335,20 @@ class Ref:
         self._root()._ref(value)
 
     def _ref(self, value):
-        if isinstance(value, Ref) and value._root() is self:
-            pass
+        """
+        self MUST be its own root
+        """
+        if isinstance(value, Ref):
+            root = value._root()
+            if root is self:
+                pass
+            else:
+                self.refered = root
         else:
             self.refered = value
 
     def __repr__(self):
-        return f'Ref({repr(self.deref())})'
+        return f"Ref({repr(self.deref())})"
 
 
 def merge_types(a, b):

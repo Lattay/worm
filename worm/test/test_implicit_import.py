@@ -35,5 +35,5 @@ def test_trigo():
     assert result, "Implicit imports"
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_trigo()

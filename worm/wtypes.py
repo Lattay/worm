@@ -69,16 +69,16 @@ def to_c_type(type):
         return "char*"
     elif type == chr:
         return "char"
-    elif hasattr(type, 'to_c'):
+    elif hasattr(type, "to_c"):
         return type.to_c()
     else:
-        raise NotImplementedError(f'{type} is not supported yet')
+        raise NotImplementedError(f"{type} is not supported yet")
 
 
 def merge_types(a, b):
-    '''
+    """
     Should be used to merge partial types.
-    '''
+    """
     # TODO
     if a == b:
         return a

@@ -13,22 +13,21 @@ class PrintfChecker(FunctionPrototype):
             return False
         _, param_convs = parse_format(format.value)
         expected_types = [formatconv_to_type(p.spec) for p in param_convs]
-        return (
-            len(expected_types) == len(args)
-            and all(map(check_type, expected_types, args))
+        return len(expected_types) == len(args) and all(
+            map(check_type, expected_types, args)
         )
 
 
 def formatconv_to_type(conv):
-    if conv in {'d', 'i', 'o', 'u', 'x', 'X'}:
+    if conv in {"d", "i", "o", "u", "x", "X"}:
         return int
-    elif conv in {'f', 'F', 'e', 'E', 'g', 'G', 'a', 'A'}:
+    elif conv in {"f", "F", "e", "E", "g", "G", "a", "A"}:
         return float
-    elif conv == 's':
+    elif conv == "s":
         return str
-    elif conv == 'c':
+    elif conv == "c":
         return chr
-    elif conv == 'p':
+    elif conv == "p":
         return ptr
 
 

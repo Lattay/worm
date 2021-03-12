@@ -183,7 +183,9 @@ class RewriteWorm(ast.NodeTransformer):
             )
 
     def visit_Starred(self, node):
-        raise WormSyntaxError("splat operator is not supported in Worm.", at=get_loc(node))
+        raise WormSyntaxError(
+            "splat operator is not supported in Worm.", at=get_loc(node)
+        )
 
     def visit_UnaryOp(self, node):
         return make_node(
@@ -512,10 +514,14 @@ class RewriteWorm(ast.NodeTransformer):
 
     def visit_FunctionDef(self, node):
         if node.args.posonlyargs:
-            raise WormSyntaxError("Worm does not support positional only arguments.", at=get_loc(node))
+            raise WormSyntaxError(
+                "Worm does not support positional only arguments.", at=get_loc(node)
+            )
 
         if node.args.kwonlyargs:
-            raise WormSyntaxError("Worm does not support keyword only arguments.", at=get_loc(node))
+            raise WormSyntaxError(
+                "Worm does not support keyword only arguments.", at=get_loc(node)
+            )
 
         args = copy_loc(
             node, List(elts=list(map(self.visit_arg, node.args.args)), ctx=Load())
@@ -570,7 +576,9 @@ class RewriteWorm(ast.NodeTransformer):
 
     def visit_ClassDef(self, node):
         if node.keywords:
-            raise WormSyntaxError("Worm does not support keywords in class definition.", at=get_loc(node))
+            raise WormSyntaxError(
+                "Worm does not support keywords in class definition.", at=get_loc(node)
+            )
 
         if len(node.body) > 0 and is_docstring(node.body[0]):
             d, *body = node.body
@@ -713,7 +721,7 @@ def op_table(op):
 
 
 def is_docstring(node):
-    'Return True if the node is a str constant.'
+    "Return True if the node is a str constant."
     return (
         isinstance(node, Expr)
         and isinstance(node.value, Constant)
