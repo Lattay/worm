@@ -1,5 +1,60 @@
+"""
+Set the basis of Worm type system.
+Summary:
+- all Worm types are instances of WormType
+- higher order types (applications from types to types) are subclasses of HigherOrderType
+  (which is a subclasses of WormType)
+- type derivated from an higher order type are instance of class defining the higer order type
+- higher order types are not types themself and must be specialized to be used
+"""
+
+
 class WormType:
-    pass
+    def __init__(self):
+        self.methods = {}
+
+    def literal_to_c(self, value):
+        raise NotImplementedError("This type does not have literal values.")
+
+    def needs_declaration(self):
+        return False
+
+    def declaration(self):
+        raise NotImplementedError("This type cannot be declared.")
+
+
+class MetaHigherOrderType(type):
+    def __getitem__(self, params):
+        return self.specialize(params)
+
+
+class HigherOrderType(WormType, metaclass=MetaHigherOrderType):
+    type_names = {}
+    name_counter = [0]
+
+    def __init__(self, basename, *args):
+        """
+        Subclasses must pass arguments to this constructor to allow instances to be hased and identified.
+        """
+        super().__init__()
+        self.caracteristic = (basename, *args)
+
+    def unique_id(self, *args, **kwargs):
+        return (args, tuple(sorted(kwargs.items())))
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, HigherOrderType)
+            and len(self.caracteristic) == len(other.caracteristic)
+            and all(s == o for s, o in zip(self.caracteristic, other.caracteristic))
+        )
+
+    def __hash__(self):
+        return hash(self.caracteristic)
+
+    @classmethod
+    def specialize(cls, *args, **kwargs):
+        return cls(*args, **kwargs)
 
 
 class SimpleType(WormType):
@@ -10,25 +65,6 @@ class SimpleType(WormType):
         return self.name
 
 
-class CompoundType(WormType):
-    def __init__(self, name, params):
-        self.name = name
-        self.params = params
-
-
-class GeneralType(WormType):
-    def __init__(self, name, params):
-        self.name = name
-        self.params = params
-
-    def __getitem__(self, params):
-        if isinstance(params, (tuple, list)):
-            _params = params
-        else:
-            _params = (params,)
-        return CompoundType(self.name, dict(zip(self.params, _params)))
-
-
 def worm_type(name, params=()):
     if not params:
         return SimpleType(name)
@@ -37,10 +73,6 @@ def worm_type(name, params=()):
 
 
 void = worm_type("void")
-ptr = worm_type("ptr", params=["refered_type"])
-
-Array = worm_type("array", params=["element_type"])
-Prod = worm_type("prod", params=["element_types"])
 
 builtin_types = {
     int,
@@ -54,7 +86,6 @@ atomic_types = {
     chr,
     str,
     float,
-    ptr,
 }
 
 
