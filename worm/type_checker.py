@@ -1,9 +1,42 @@
 from functools import reduce
 
-from .errors import WormTypeError
+from .errors import WormTypeError, WormBindingError
 from .visitor import WormVisitor
-from .wtypes import void, ptr, Array, SimpleType
+from .wtypes import void, Ptr, Deref, SimpleType, Struct, Array
 from .wast import WName, WStoreName, WConstant, Ref, merge_types
+
+
+class ResolveTypes(WormVisitor):
+    def __init__(self, prelude):
+        self.symbol_table = {**prelude}
+
+    def visit_funcDef(self, node):
+        old_table = self.symbol_table
+        self.symbol_table = {**old_table, **node.attached}
+        for arg in node.args:
+            arg.type = resolve_type(arg.type, self.symbol_table)
+        node.returns = resolve_type(node.returns, self.symbol_table)
+
+        new = super().visit_funcDef(node)
+        self.symbol_table = old_table
+
+        return new
+
+    def visit_assign(self, node):
+        node.type = resolve_type(node.type, self.symbol_table)
+        return node
+
+
+def resolve_type(type_, table):
+    t = type_.deref()
+    if isinstance(t, WName):
+        if t.name in table:
+            return Ref(table[t.name])
+        else:
+            raise WormBindingError(f"Unknown type {t.name}.", at=t.src_pos)
+    # FIXME add resolution of complex types
+    else:
+        return type_
 
 
 class AnnotateSymbols(WormVisitor):
@@ -24,7 +57,7 @@ class AnnotateSymbols(WormVisitor):
         for arg in node.args:
             self.symbol_table[arg.name] = Ref(arg.type)
         self.symbol_table[node.name] = Ref(
-            FunctionPrototype(node.returns, *(arg.type for arg in node.args))
+            FunctionPrototype(node.returns or Missing(node.src_pos), *(arg.type for arg in node.args))
         )
         return super().visit_funcDef(node)
 
@@ -33,7 +66,19 @@ class AnnotateSymbols(WormVisitor):
             target = node.targets[0]
             if isinstance(target, WStoreName):
                 name = target.name
-                if name not in self.symbol_table:
+                if name in self.symbol_table:
+                    if not node.type.deref():
+                        node.type = self.symbol_table[name]
+                    else:
+                        new_type = merge_types(node.type, self.symbol_table[name])
+                        if new_type is None:
+                            raise WormTypeError(
+                                "Incompatible type in assignment. The symbol seems to be annoted more than once.",
+                                at=node.src_pos,
+                                expect=node.value.type,
+                                got=self.symbol_table[target.name],
+                            )
+                else:
                     if not node.type.deref():
                         node.type = Missing(node.src_pos)
                     self.symbol_table[name] = Ref(node.type)
@@ -78,6 +123,13 @@ class PropagateAndCheckTypes(WormVisitor):
 
         return node
 
+    def visit_struct(self, node):
+        super().visit_struct(node)
+        node.type = Struct(
+            **{key.name: val.type.deref() for key, val in node.fields}
+        )
+        return node
+
     def visit_tuple(self, node):
         return self.visit_array(node)
 
@@ -86,6 +138,15 @@ class PropagateAndCheckTypes(WormVisitor):
         node.operand = self.visit(node.operand)
         node.type = node.operand.type
         return node
+
+    def visit_ptr(self, node):
+        node.value = self.visit(node.value)
+        node.type = Ptr(node.value.type)
+        return node
+
+    def visit_deref(self, node):
+        node.value = self.visit(node.value)
+        node.type = Deref(node.value.type)
 
     def visit_binary(self, node):
         # FIXME take operator overloading in account
@@ -134,7 +195,13 @@ class PropagateAndCheckTypes(WormVisitor):
         return node
 
     def visit_getAttr(self, node):
-        raise NotImplementedError("Type of attribute")
+        node.value = self.visit(node.value)
+        t = node.value.type.deref()
+        if t.expose_attr(node.attr):
+            node.type = t.get_attr(node.attr)
+        else:
+            raise WormTypeError(f"The type {t} does not exposes attribute {node.attr}.")
+        return node
 
     def visit_getItem(self, node):
         raise NotImplementedError("Type of item")
@@ -165,21 +232,25 @@ class PropagateAndCheckTypes(WormVisitor):
         return node
 
     def visit_funcDef(self, node):
-        self.current_function_return.append(node.returns)
+        self.current_function_return.append(Ref(node.returns))
         res = super().visit_funcDef(node)
+
+        if isinstance(node.returns.deref(), Missing):
+            node.returns = void
+
         self.current_function_return.pop()
         return res
 
     def visit_return(self, node):
         node.value = self.visit(node.value)
-        if node.value.type.deref() != self.current_function_return[-1].deref():
+        res = merge_types(node.value.type, self.current_function_return[-1])
+        if res is None:
             raise WormTypeError(
                 "Incompatible type returned.",
                 at=node.src_pos,
                 expect=self.current_function_return[-1],
                 got=node.value.type,
             )
-        self.current_function_return[-1] = node.value.type
         return node
 
     def visit_call(self, node):
@@ -229,7 +300,7 @@ def check_type(expected, instance):
             and len(instance.value) == 1
         )
         or (_expected is void and instance.type.deref() is None)
-        or (_expected is int and isinstance(instance, ptr))
+        or (_expected is int and isinstance(instance, Ptr))
     )
 
 

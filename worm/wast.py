@@ -1,3 +1,4 @@
+from .errors import WormTypeError
 from .wtypes import merge_types as _merge_types
 
 
@@ -94,10 +95,19 @@ class WTuple(WExpr):
         self.elements = list(elements)
 
 
+class WStruct(WExpr):
+    def __init__(self, *fields, **kwargs):
+        super().__init__(**kwargs)
+        self.fields = fields
+
+
 class WName(WAst):
     def __init__(self, name, **kwargs):
         super().__init__(**kwargs)
         self.name = name
+
+    def __repr__(self):
+        return f"WName('{self.name}')"
 
 
 class WStoreName(WAst):
@@ -318,6 +328,36 @@ class WReturn(WStatement):
         self.value = value
 
 
+class WPrimitiveExpr(WExpr):
+    pass
+
+
+class WPtr(WPrimitiveExpr):
+    _primitive = True
+
+    def __init__(self, *args, **kwargs):
+        if len(args) != 1:
+            raise WormTypeError("ptr must be applied to exaclty one value.")
+        val = args[0]
+        if kwargs:
+            raise WormTypeError("ptr does not accept keyword arguments.", at=val)
+
+        self.value = val
+
+
+class WDeref(WPrimitiveExpr):
+    _primitive = True
+
+    def __init__(self, *args, **kwargs):
+        if len(args) != 1:
+            raise WormTypeError("deref must be applied to exaclty one value.")
+        val = args[0]
+        if kwargs:
+            raise WormTypeError("deref does not accept keyword arguments.", at=val)
+
+        self.value = val
+
+
 class Ref:
     def __init__(self, value):
         self.refered = value
@@ -352,9 +392,9 @@ class Ref:
 
 
 def merge_types(a, b):
-    new_type = _merge_types(a._type.value, b._type.value)
+    new_type = Ref(_merge_types(a.deref(), b.deref()))
     if new_type is None:
         return None
-    a._type = Ref(new_type)
-    b._type = a._type
+    a.ref(new_type)
+    b.ref(a)
     return new_type

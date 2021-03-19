@@ -15,8 +15,8 @@ from .wast import (
     WExpr,
 )
 from .prelude import prelude
-from .wtypes import to_c_type, void
-from .type_checker import AnnotateSymbols, PropagateAndCheckTypes
+from .wtypes import to_c_type, void, WormType, Array
+from .type_checker import ResolveTypes, AnnotateSymbols, PropagateAndCheckTypes
 
 
 class Program:
@@ -34,12 +34,15 @@ class Program:
     def dump_source(self):
         headers = ["#include <stdio.h>", "#include <stdlib.h>", "#include <stdint.h>"]
 
+        scope = {**prelude}
+
         pipeline = [
-            TreatBlocks(),
-            Renaming(prelude),
-            AnnotateSymbols(prelude),
-            PropagateAndCheckTypes(prelude),
+            Unsugar(),
+            Renaming(scope),
+            ResolveTypes(scope),
             ValidateMain(),
+            AnnotateSymbols(scope),
+            PropagateAndCheckTypes(scope),
             MakeCSource(),
         ]
 
@@ -91,7 +94,7 @@ class ValidateMain(WormVisitor):
             )
 
 
-class TreatBlocks(WormVisitor):
+class Unsugar(WormVisitor):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.scope = [{}]
@@ -103,8 +106,7 @@ class TreatBlocks(WormVisitor):
         return None
 
     def visit_funcDef(self, node):
-        if hasattr(node, "_scope"):
-            self.scope.extend(node._scope)
+        self.scope.append(node.attached)
 
         return super().visit_funcDef(node)
 
@@ -120,8 +122,11 @@ class TreatBlocks(WormVisitor):
     def visit_call(self, node):
         if isinstance(node.func, WName):
             bind = self.lookup(node.func.name)
-            if bind and hasattr(bind, "_wrapped_block"):
-                return bind(*node.args, **node.kwargs)
+            if bind:
+                if getattr(bind, "_wrapped_block", False):
+                    return bind(*node.args, **node.kwargs)
+                elif getattr(bind, "_primitive", False):
+                    return bind(super().visit_call(node))
         return super().visit_call(node)
 
 
@@ -186,13 +191,6 @@ class Renaming(WormVisitor):
         self.scope[-1].append({})
         yield
         self.scope[-1].pop()
-
-    # @contextmanager
-    # def extend_scope(self, scope):
-    #     old_scope = self.scope
-    #     self.scope = old_scope + list(scope)
-    #     yield
-    #     self.scope = old_scope
 
     # Visitors
     def visit_topLevel(self, node):
@@ -289,6 +287,11 @@ class Renaming(WormVisitor):
 class MakeCSource(WormVisitor):
     def visit_topLevel(self, node):
         code = node.headers
+
+        for t in set(node.symbol_table.values()):
+            if isinstance(t, WormType) and t.is_declared():
+                code.append(t.declaration(to_c_type))
+
         for f in node.functions:
             proto = f.prototype
             arg_list = ", ".join(to_c_type(type.deref()) for type in proto["args"])
@@ -306,20 +309,28 @@ class MakeCSource(WormVisitor):
         return repr(node.value)
 
     def visit_array(self, node):
-        return (
-            f"{{.length={len(node.elements)}, .elements={{"
-            + ", ".join(map(self.visit, node.elements))
-            + "}}"
+        return Array(node.elements.type.deref()).value_to_c(
+            list(map(self.visit, node.elements))
         )
 
     def visit_tuple(self, node):
         raise NotImplementedError()
+
+    def visit_struct(self, node):
+        return (
+            f"({to_c_type(node.type.deref())}){{"
+            + ", ".join(f".{name}={val}" for name, val in node.fields)
+            + "}"
+        )
 
     def visit_name(self, node):
         return node.name
 
     def visit_unary(self, node):
         return f"{node.op}{self.visit(node.operand)}"
+
+    def visit_ptr(self, node):
+        return f"*({self.visit(node.value)})"
 
     def visit_binary(self, node):
         a, b = self.visit(node.left), self.visit(node.right)
@@ -366,7 +377,8 @@ class MakeCSource(WormVisitor):
         return f"({test}?{body}:{orelse})"
 
     def visit_getAttr(self, node):
-        raise NotImplementedError()
+        # FIXME probably too rigid, may need some participation of the type
+        return f"{self.visit(node.value)}.{node.attr}"
 
     def visit_setAttr(self, node):
         raise NotImplementedError()
@@ -425,11 +437,16 @@ class MakeCSource(WormVisitor):
     def visit_funcDef(self, node):
         prelude = []
         for name, value in node.attached.items():
+            # FIXME attached is weird, it represent both values put in scope and types and is used at different moments
             if isinstance(value, (int, bool, float, str)):
                 t = to_c_type(type(value))
                 prelude.append(f"{t} {name} = {repr(value)};")
+            elif isinstance(value, (WormType, type(lambda: 0))):
+                pass  # we probably don't need that
             else:
-                raise NotImplementedError()
+                continue
+                # FIXME there is really to many things, we may need to split attached into two separate things again
+                raise NotImplementedError(f"We got a {name}={value} in attached values of {node.name}")
         body = self.visit(node.body)
         returns = to_c_type(node.returns.deref())
         args = [f"{to_c_type(arg.type.deref())} {arg.name}" for arg in node.args]

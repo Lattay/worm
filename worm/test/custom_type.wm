@@ -1,10 +1,28 @@
 '''#include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+typedef struct {
+    float x, y;
+} point_t1;
+
+void printp(point_t1 p){
+    printf("(%f, %f)\\n", p.x, p.y);
+}
+
 void main(){
+    point_t1 p1 = {.x=1.4, .y=4.5};
+    printp(p1);
 }
 '''
 
-@worm.entry
-def f():
-    pass
+
+with worm.scope(point=Struct(x=float, y=float)):
+    @worm
+    def printp(p: point) -> void:
+        printf("(%f, %f)\n", p.x, p.y)
+
+
+    @worm.entry
+    def f():
+        p1: point = {x: 1.4, y: 4.5}
+        printp(p1)

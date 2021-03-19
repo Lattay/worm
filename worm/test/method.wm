@@ -1,0 +1,40 @@
+'''#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+typedef struct {
+    size_t length;
+    int64_t elems[];
+} array_t1;
+
+int64_t reduce_array_1(array_t1* self_v1, *(int64_t)(int64_t, int64_t) fn_v2, int64_t init_v3){
+    int64_t acc = init;
+    for(size_t i_v4; i < self_v1->length; i++){
+        acc = fn_v2(acc, self_v1->elems[i]);
+    }
+    return acc;
+}
+
+void main(){
+    array_t1 a_v1 = {.length=4, .elems={1, 2, 3, 4}};
+    printf("%d\n", reduce_array_1(&a_v5, &add_1, 0))
+}
+'''
+
+with worm.any_type as T:
+    @worm.method(Array[T])
+    def reduce(self, fn, init: T):
+        acc = init
+        for i in range(self.length):
+            acc = fn(acc, f[i])
+        return acc;
+
+
+@worm
+def add(a: int, b: int):
+    return a + b
+
+
+@worm.entry
+def f():
+    a = [1, 2, 3, 4]
+    preintf("%d\n", a.reduce(add, 0))

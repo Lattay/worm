@@ -54,6 +54,15 @@ class WormContext:
         finally:
             self._scope.pop()
 
+    def flat_scope(self):
+        """
+        Return a flat snapshot of the current scope.
+        """
+        final = {}
+        for frame in self._scope:
+            final.update(frame)
+        return final
+
     @invalidate_progam
     def add(self, node, /, **injected):
         """
@@ -68,14 +77,14 @@ class WormContext:
                 not injected
             ), "worm.add does not accept keyword arguments with function definition parameter."
             self.add_to_scope(node.name, node)
-            self._save_scope(node)
+            node.attached = self.flat_scope()
             self.functions.add(node)
         elif isinstance(node, WClass):
             assert (
                 not injected
             ), "worm.add does not accept keyword arguments with class definition parameter."
             self.add_to_scope(node.name, node)
-            self._save_scope(node)
+            node.attached = self.flat_scope()
             self.classes.add(node)
         else:
             b = WBlock([node]).copy_common(node)
@@ -93,7 +102,7 @@ class WormContext:
         Take a worm function and register it as the program entry point.
         """
         self.add_to_scope(f.name, f)
-        self._save_scope(f)
+        f.attached = self.flat_scope()
         assert isinstance(
             f, WFuncDef
         ), "Only a function can be taken as an entry point."
@@ -128,7 +137,7 @@ class WormContext:
             b.hygienic = True
 
             with self.scope(**injected):
-                self._save_scope(b)
+                b.attached = self.flat_scope()
             b.injected = injected
             return b
 
@@ -144,10 +153,6 @@ class WormContext:
         Syntactic sugar for worm.add
         """
         return self.add(*args, **kwargs)
-
-    def _save_scope(self, f):
-        assert isinstance(f, WAst), f"Expected Worm AST node but got {type(f)}."
-        f._scope = deepcopy(self._scope)
 
     def dump_source(self):
         """

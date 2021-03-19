@@ -170,7 +170,19 @@ class RewriteWorm(ast.NodeTransformer):
         pass
 
     def visit_Dict(self, node):
-        pass
+        if any(not isinstance(key, Name) for key in node.keys):
+            raise WormSyntaxError(
+                "Struct literals takes only symbols as keys.", at=node.src_pos
+            )
+
+        return make_node(
+            node,
+            "struct",
+            values=[
+                copy_loc(node, Tuple([self.visit(key), self.visit(val)], ctx=Load()))
+                for key, val in zip(node.keys, node.values)
+            ],
+        )
 
     def visit_Name(self, node):
         if isinstance(node.ctx, Store):
@@ -354,7 +366,7 @@ class RewriteWorm(ast.NodeTransformer):
             values=[
                 copy_loc(node.target, List(elts=[self.visit(node.target)], ctx=Load())),
                 self.visit(node.value),
-                node.annotation,
+                self.visit(node.annotation or copy_loc(node, Constant(None))),
             ],
         )
 
@@ -562,7 +574,7 @@ class RewriteWorm(ast.NodeTransformer):
         return reduce(compose_dec, reversed(node.decorator_list), func)
 
     def visit_arg(self, node):
-        annot = node.annotation or Constant(None)
+        annot = self.visit(node.annotation or copy_loc(node, Constant(None)))
         return make_node(
             node, "arg", values=[copy_loc(node, Constant(node.arg)), annot]
         )

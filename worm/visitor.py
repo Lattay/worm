@@ -5,7 +5,10 @@ from .wast import (
     WAst,
     WArray,
     WTuple,
+    WStruct,
     WUnary,
+    WPtr,
+    WDeref,
     WBinary,
     WBoolOp,
     WCompare,
@@ -41,7 +44,7 @@ class WormVisitor:
     def visit_topLevel(self, node):
         return WTopLevel(
             entry=self.visit(node.entry),
-            functions=map(self.visit, node.functions),
+            functions=list(map(self.visit, node.functions)),
             headers=node.headers,
         ).copy_common(node)
 
@@ -54,6 +57,11 @@ class WormVisitor:
     def visit_tuple(self, node):
         return WTuple(*map(self.visit, node.elements)).copy_common(node)
 
+    def visit_struct(self, node):
+        return WStruct(
+            *((name, self.visit(val)) for name, val in node.fields)
+        ).copy_common(node)
+
     def visit_name(self, node):
         return node
 
@@ -62,6 +70,12 @@ class WormVisitor:
 
     def visit_unary(self, node):
         return WUnary(node.op, self.visit(node.operand)).copy_common(node)
+
+    def visit_ptr(self, node):
+        return WPtr(node.value).copy_common(node)
+
+    def visit_deref(self, node):
+        return WDeref(node.value).copy_common(node)
 
     def visit_binary(self, node):
         return WBinary(node.op, *map(self.visit, (node.left, node.right))).copy_common(
@@ -94,10 +108,10 @@ class WormVisitor:
         ).copy_common(node)
 
     def visit_getAttr(self, node):
-        return WGetAttr(*map(self.visit, (node.value, node.attr))).copy_common(node)
+        return WGetAttr(self.visit(node.value), node.attr).copy_common(node)
 
     def visit_setAttr(self, node):
-        return WSetAttr(*map(self.visit, (node.value, node.attr))).copy_common(node)
+        return WSetAttr(self.visit(node.value), node.attr).copy_common(node)
 
     def visit_getItem(self, node):
         return WGetItem(*map(self.visit, (node.value, node.slice_))).copy_common(node)

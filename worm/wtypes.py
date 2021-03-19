@@ -13,19 +13,31 @@ class WormType:
     def __init__(self):
         self.methods = {}
 
-    def literal_to_c(self, value):
+    def value_to_c(self, value):
         raise NotImplementedError("This type does not have literal values.")
 
-    def needs_declaration(self):
+    def is_declared(self):
         return False
 
-    def declaration(self):
+    def declaration(self, to_c):
         raise NotImplementedError("This type cannot be declared.")
+
+    def type_to_c(self, to_c):
+        raise NotImplementedError("This type is not expressed in C")
+
+    def expose_attr(self, attr):
+        return False
+
+    def get_attr(self, attr, default=None):
+        return default
 
 
 class MetaHigherOrderType(type):
     def __getitem__(self, params):
-        return self.specialize(params)
+        if isinstance(params, tuple):
+            return self.specialize(*params)
+        else:
+            return self.specialize(params)
 
 
 class HigherOrderType(WormType, metaclass=MetaHigherOrderType):
@@ -37,10 +49,22 @@ class HigherOrderType(WormType, metaclass=MetaHigherOrderType):
         Subclasses must pass arguments to this constructor to allow instances to be hased and identified.
         """
         super().__init__()
-        self.caracteristic = (basename, *args)
+        self.caracteristic = (self.__class__.__name__, *args)
+        self.id = self.unique_id(basename, *args)
+        if self.id not in self.type_names:
+            self.name_counter[0] += 1
+            self.type_names[self.id] = f"{basename}_{self.name_counter[0]}"
 
-    def unique_id(self, *args, **kwargs):
-        return (args, tuple(sorted(kwargs.items())))
+        self.name = self.type_names[self.id]
+
+    def unique_id(self, *args):
+        return args
+
+    def is_declared(self):
+        return True
+
+    def declaration(self, to_c):
+        return f"typedef {self.type_to_c(to_c)} {self.name};"
 
     def __eq__(self, other):
         return (
@@ -61,49 +85,116 @@ class SimpleType(WormType):
     def __init__(self, name):
         self.name = name
 
-    def to_c(self):
+    def type_to_c(self, _):
         return self.name
 
 
-def worm_type(name, params=()):
-    if not params:
-        return SimpleType(name)
-    else:
-        return GeneralType(name, params)
+class Primitive(HigherOrderType):
+    def to_primitives(self):
+        return self
 
 
-void = worm_type("void")
+class Ptr(Primitive):
+    def __init__(self, pointed_type):
+        super().__init__("pointer", pointed_type)
+        self.pointed_type = pointed_type
 
-builtin_types = {
-    int,
-    str,
-    float,
-}
+    def type_to_c(self, other_to_c):
+        return other_to_c(self.pointed_type) + "*"
 
-atomic_types = {
-    # TODO add other flavor or int and floats (unsigned, other sizes...)
-    int,
-    chr,
-    str,
-    float,
-}
+    def is_declared(self):
+        return False
 
 
-def to_c_type(type):
-    if type == int:
+class Deref(HigherOrderType):
+    def __init__(self, derefed_type):
+        super().__init__("deref", derefed_type)
+        self.derefed_type = derefed_type
+
+    def type_to_c(self, other_to_c):
+        raise NotImplementedError()
+        return other_to_c(self.derefed_type) + "*"
+
+    def is_declared(self):
+        return False
+
+
+class Struct(Primitive):
+    def __init__(self, **fields):
+        super().__init__("struct", tuple(fields.items()))
+        self.fields = fields
+
+    def expose_attr(self, name):
+        if name in self.fields:
+            return name
+
+    def get_attr(self, name, default=None):
+        return self.fields.get(name, default)
+
+    def type_to_c(self, other_to_c):
+        code = ["struct {"]
+        for name, type in self.fields.items():
+            code.append(f"{other_to_c(type)} {name};")
+        code.append("}")
+        return "\n".join(code)
+
+    def value_to_c(self, **fields):
+        return (
+            "{" + ", ".join(f".{name}={value}" for name, value in fields.items()) + "}"
+        )
+
+
+class CArray(Primitive):
+    def __init__(self, elements_type, size=None):
+        super().__init__("array", (elements_type, size))
+        self.elements_type = elements_type
+        self.size = size
+
+    def type_to_c(self, other_to_c):
+        return (
+            other_to_c(self.elements_type) + "[]"
+            if self.size is None
+            else f"[{self.size}]"
+        )
+
+
+class Array(HigherOrderType):
+    def __init__(self, element_type):
+        super().__init__("array", element_type)
+        self.element_type = element_type
+        self.struct = Struct(len=int, elems=self.element_type)
+
+    def value_to_c(self, elements):
+        return f"{{.length={len(elements)}, .elements={{"
+        +", ".join(elements)
+        +"}}"
+
+    def to_primitives(self):
+        return self.struct
+
+
+void = SimpleType("void")
+char = SimpleType("char")
+
+
+def to_c_type(type_):
+    if type_ == int:
         return "int64_t"
-    elif type == bool:
+    elif type_ == bool:
         return "bool"
-    elif type == float:
+    elif type_ == float:
         return "double"
-    elif type == str:
+    elif type_ == str:
         return "char*"
-    elif type == chr:
-        return "char"
-    elif hasattr(type, "to_c"):
-        return type.to_c()
+    elif isinstance(type_, WormType):
+        if type_.is_declared():
+            return type_.name
+        elif hasattr(type_, "to_primitives"):
+            return to_c_type(type_.to_primitives())
+        else:
+            return type_.type_to_c(to_c_type)
     else:
-        raise NotImplementedError(f"{type} is not supported yet")
+        raise NotImplementedError(f"{type_} is not a valid type.")
 
 
 def merge_types(a, b):
