@@ -712,8 +712,10 @@ def is_quoting(f):
             and f.value.id == "worm"
             and f.attr
             in {
-                "entry",
                 "block",
+                "entry",
+                "exported",
+                "method",
             }
         )
 

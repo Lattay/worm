@@ -69,31 +69,6 @@ class Program:
         pass
 
 
-class ValidateMain(WormVisitor):
-    def visit_topLevel(self, node):
-        if node.entry is not None:
-            if node.entry.returns.deref() is None:
-                node.entry.returns = void
-                self.returns = void
-            else:
-                self.returns = int
-                node.entry.returns = int
-            self.visit(node.entry.body)
-
-        return node
-
-    def visit_return(self, node):
-        if self.returns.deref() == void:
-            if node.value is not None:
-                raise WormTypeError(
-                    "The entry point has a non void return.", at=node.src_pos
-                )
-        elif node.value.type.deref() != int:
-            raise WormTypeError(
-                "The entry point has a non int return.", at=node.src_pos
-            )
-
-
 class Unsugar(WormVisitor):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -279,9 +254,48 @@ class Renaming(WormVisitor):
         local_name = self.in_local_scope(node.name)
         if local_name:  # set a local variable
             renamed = local_name
+            declaration = False
         else:  # create a new variable, eventually shadowing an external one
             renamed = self.add_to_scope(node.name)
-        return WStoreName(renamed).copy_common(node)
+            declaration = True
+        n = WStoreName(renamed).copy_common(node)
+        n.declaration = declaration
+        return n
+
+
+class CollectRequiredSymbols(WormVisitor):
+    def __init__(self):
+        self.required = {}
+
+    def visit_topLevel(self, node):
+        if node.entry is not None:
+            self.visit(node.entry)
+        return node
+
+
+class ValidateMain(WormVisitor):
+    def visit_topLevel(self, node):
+        if node.entry is not None:
+            if node.entry.returns.deref() is None:
+                node.entry.returns = void
+                self.returns = void
+            else:
+                self.returns = int
+                node.entry.returns = int
+            self.visit(node.entry.body)
+
+        return node
+
+    def visit_return(self, node):
+        if self.returns.deref() == void:
+            if node.value is not None:
+                raise WormTypeError(
+                    "The entry point has a non void return.", at=node.src_pos
+                )
+        elif node.value.type.deref() != int:
+            raise WormTypeError(
+                "The entry point has a non int return.", at=node.src_pos
+            )
 
 
 class MakeCSource(WormVisitor):
@@ -306,7 +320,10 @@ class MakeCSource(WormVisitor):
         return "\n".join(code)
 
     def visit_constant(self, node):
-        return repr(node.value)
+        if isinstance(node.value, str):
+            return "\"" + repr(node.value)[1:-1] + "\""
+        else:
+            return repr(node.value)
 
     def visit_array(self, node):
         return Array(node.elements.type.deref()).value_to_c(
@@ -319,7 +336,7 @@ class MakeCSource(WormVisitor):
     def visit_struct(self, node):
         return (
             f"({to_c_type(node.type.deref())}){{"
-            + ", ".join(f".{name}={val}" for name, val in node.fields)
+            + ", ".join(f".{self.visit(name)}={self.visit(val)}" for name, val in node.fields)
             + "}"
         )
 
@@ -401,7 +418,10 @@ class MakeCSource(WormVisitor):
 
         expr = self.visit(node.value)
 
-        return f"{target.name} = {expr};"
+        if target.declaration:
+            return f"{to_c_type(node.type.deref())} {target.name} = {expr};"
+        else:
+            return f"{target.name} = {expr};"
 
     def visit_raise(self, node):
         raise NotImplementedError()

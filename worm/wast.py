@@ -114,6 +114,12 @@ class WStoreName(WAst):
     def __init__(self, name, **kwargs):
         super().__init__(**kwargs)
         self.name = name
+        self.declaration = False
+
+    def copy_common(self, other):
+        if isinstance(other, WStoreName):
+            self.declaration = other.declaration
+        return super().copy_common(other)
 
 
 class WUnary(WExpr):

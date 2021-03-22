@@ -23,9 +23,16 @@ def invalidate_progam(f):
 
 class WormContext:
     def __init__(self):
+        self.setup_fresh_state()
+
+    def setup_fresh_state(self):
+        """
+        Clear all states and setup the context for a new program.
+        """
         self.functions = set()
         self.classes = set()
         self.entry_point = None
+        self.exported = set()
 
         self._scope = [{}]
         self._program = None
@@ -107,6 +114,19 @@ class WormContext:
             f, WFuncDef
         ), "Only a function can be taken as an entry point."
         self.entry_point = f
+        return f
+
+    @invalidate_progam
+    def export(self, f):
+        """
+        Take a worm function and register it as an exported function.
+        """
+        self.add_to_scope(f.name, f)
+        f.attached = self.flat_scope()
+        assert isinstance(
+            f, WFuncDef
+        ), "Only a function can be exported."  # FIXME export types too
+        self.exported.add(f.name)
         return f
 
     @invalidate_progam

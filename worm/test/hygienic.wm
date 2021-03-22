@@ -2,13 +2,13 @@
 #include <stdlib.h>
 #include <stdint.h>
 void main(){
-v1_a = 1;
-v2_b = 3;
-v3_c = 4;
-v4_c = v2_b;
+int64_t v1_a = 1;
+int64_t v2_b = 3;
+int64_t v3_c = 4;
+int64_t v4_c = v2_b;
 v2_b = v3_c;
 v3_c = v4_c;
-printf('%d %d %d\\n', v1_a, v2_b, v3_c);
+printf("%d %d %d\\n", v1_a, v2_b, v3_c);
 }'''
 
 @worm.block
