@@ -25,16 +25,19 @@ class WAst:
 
 
 class WTopLevel(WAst):
-    def __init__(self, *, entry=None, functions=(), headers=(), **kwargs):
+    def __init__(self, *, entry=None, functions=(), headers=(), exported=(), **kwargs):
         super().__init__(**kwargs)
         self.entry = entry
         self.functions = list(functions)
         self.headers = list(headers)
+        self.exported = set(exported)
         self.symbol_table = {}
+        self.required = {}
 
     def copy_common(self, other):
         if isinstance(other, WTopLevel):
             self.symbol_table = other.symbol_table
+            self.required = other.required
 
         return super().copy_common(other)
 

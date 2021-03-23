@@ -7,11 +7,13 @@ Summary:
 - type derivated from an higher order type are instance of class defining the higer order type
 - higher order types are not types themself and must be specialized to be used
 """
+from uuid import uuid1
 
 
 class WormType:
     def __init__(self):
         self.methods = {}
+        self.id = uuid1()
 
     def value_to_c(self, value):
         raise NotImplementedError("This type does not have literal values.")

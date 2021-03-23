@@ -20,16 +20,23 @@ from .type_checker import ResolveTypes, AnnotateSymbols, PropagateAndCheckTypes
 
 
 class Program:
-    def __init__(self, entry_point, functions):
+    def __init__(self, entry_point, functions, exported):
         self.entry_point = entry_point
         self.functions = functions
+        self.exported = exported
 
     @classmethod
     def from_context(cls, context):
         functions = context.functions
         entry_point = context.entry_point
 
-        return cls(entry_point, functions)
+        exported = set()
+
+        for f in functions:
+            if f.name in context.exported:
+                exported.add(f)
+
+        return cls(entry_point, functions, exported)
 
     def dump_source(self):
         headers = ["#include <stdio.h>", "#include <stdlib.h>", "#include <stdint.h>"]
@@ -49,8 +56,9 @@ class Program:
         def transform(node):
             return reduce(lambda n, t: t.visit(n), pipeline, node)
 
+
         top_level = WTopLevel(
-            entry=self.entry_point, functions=self.functions, headers=headers
+            entry=self.entry_point, functions=self.functions, headers=headers, exported=self.exported
         )
 
         return transform(top_level)
@@ -263,16 +271,6 @@ class Renaming(WormVisitor):
         return n
 
 
-class CollectRequiredSymbols(WormVisitor):
-    def __init__(self):
-        self.required = {}
-
-    def visit_topLevel(self, node):
-        if node.entry is not None:
-            self.visit(node.entry)
-        return node
-
-
 class ValidateMain(WormVisitor):
     def visit_topLevel(self, node):
         if node.entry is not None:
@@ -298,18 +296,49 @@ class ValidateMain(WormVisitor):
             )
 
 
+class CollectRequiredSymbols(WormVisitor):
+    def __init__(self):
+        self.required = {}
+
+    def visit_topLevel(self, node):
+        functions = {f.name: f for f in node.functions}
+        types = {t.id: t for t in node.types}
+        if node.entry is not None:
+            self.visit(node.entry)
+        else:
+            for f in node.exported:
+                self.required[f.name] = f
+                self.visit(f)
+        diff = set(self.required.keys())
+        while diff:
+            prev = set(self.required.keys())
+            for symbol, val in diff.items():
+                if isinstance(val, WAst):
+                    self.visit(val)
+
+            diff = prev.difference(self.required.keys())
+
+        node.required = self.required
+
+        return node
+
+    # FIXME collecter les symboles sans mettre des trucs locaux dans required
+    # Probleme: Renaming sert justement à ne plus avoir besoin de connaitre le scope des
+    # symboles alors comment faire le tri dans cette passe ?
+
 class MakeCSource(WormVisitor):
     def visit_topLevel(self, node):
         code = node.headers
 
-        for t in set(node.symbol_table.values()):
+        for k, t in node.required.items():
             if isinstance(t, WormType) and t.is_declared():
                 code.append(t.declaration(to_c_type))
 
-        for f in node.functions:
-            proto = f.prototype
-            arg_list = ", ".join(to_c_type(type.deref()) for type in proto["args"])
-            code.append(to_c_type(proto["return"]) + f' {proto["name"]}({arg_list});')
+        for k, f in node.required.items():
+            if isinstance(f, WFuncDef):
+                proto = f.prototype
+                arg_list = ", ".join(to_c_type(type.deref()) for type in proto["args"])
+                code.append(to_c_type(proto["return"]) + f' {proto["name"]}({arg_list});')
 
         if node.entry is not None:
             code.append(self.visit(node.entry))
