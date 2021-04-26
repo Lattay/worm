@@ -13,6 +13,15 @@ def test_hygienic():
     assert __doc__ == worm.dump_source()
 
 
+def test_fib():
+    from .. import worm
+    # prevent inter test pollution
+    worm.setup_fresh_state()
+
+    from .fib import worm, __doc__
+
+    assert __doc__ == worm.dump_source()
+
 def test_type_check():
     from .. import worm
     # prevent inter test pollution

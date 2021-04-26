@@ -55,7 +55,7 @@ _op_names = {
 
 
 prelude = [
-    ImportFrom(module="worm", names=[alias(name="worm")], level=0),
+    ImportFrom(module="worm", names=[alias(name="worm"), alias(name="_worm_decorator_wrapper")], level=0),
     ImportFrom(module="worm.wast", names=[alias(name="*")], level=0),
     ImportFrom(module="worm.wtypes", names=[alias(name="*")], level=0),
 ]
@@ -88,7 +88,7 @@ class RewriteTopLevel(ast.NodeTransformer):
         if node.decorator_list:
             decorated_func = RewriteWorm().visit(node)
             lambda_func = make_lambda(decorated_func)
-            decorators = make_list(map(make_lambda, node.decorator_list))
+            decorators = make_list(node.decorator_list[0], map(make_lambda, node.decorator_list))
             apply = make_apply_decorator(decorators, lambda_func)
             node.decorator_list = [apply]
         if len(node.body) > 0 and is_docstring(node.body[0]):
@@ -102,7 +102,7 @@ class RewriteTopLevel(ast.NodeTransformer):
         if node.decorator_list:
             decorated_func = RewriteWorm().visit(node)
             lambda_func = make_lambda(decorated_func)
-            decorators = make_list(map(make_lambda, node.decorator_list))
+            decorators = make_list(node.decorator_list[0], map(make_lambda, node.decorator_list))
             apply = make_apply_decorator(decorators, lambda_func)
             node.decorator_list = [apply]
         if len(node.body) > 0 and is_docstring(node.body[0]):
@@ -709,17 +709,35 @@ def make_lambda(expr):
     return copy_loc(
         expr,
         Lambda(
-            args=arguments(),
+            args=arguments(
+                posonlyargs=[],
+                args=[],
+                varargs=[],
+                kwonlyargs=[],
+                kw_defaults=[],
+                defaults=[],
+            ),
             body=expr,
         )
     )
 
 
-def make_list(gen):
+def make_list(ref, gen):
     """
     Take some sort of iterable and produce a List node
     """
-    return List(elts=list(gen), cts=Load())
+    return copy_loc(ref, List(elts=list(gen), ctx=Load()))
+
+
+def make_apply_decorator(decorators, func):
+    return copy_loc(
+        func,
+        Call(
+            func=copy_loc(func, Name(id="_worm_decorator_wrapper", ctx=Load())),
+            args=[decorators, func],
+            keywords=[],
+        ),
+    )
 
 
 def is_quoting(f):
@@ -737,14 +755,6 @@ def is_quoting(f):
                 "method",
             }
         )
-
-
-def make_apply_decorator(decorators, func):
-    return Call(
-        func=Name(id="_worm_decorator_wrapper", ctx=Load()),
-        args=[decorators, func],
-        keywords=[],
-    ),
 
 
 def is_unquoting(f):
