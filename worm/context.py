@@ -1,6 +1,5 @@
 from contextlib import contextmanager
 from functools import wraps
-from copy import deepcopy
 
 from .wast import (
     WAst,
@@ -10,6 +9,11 @@ from .wast import (
     WBlock,
 )
 from .program import Program
+
+
+def tag(f):
+    f._worm_method_tag = True
+    return f
 
 
 def invalidate_progam(f):
@@ -24,6 +28,7 @@ def invalidate_progam(f):
 class WormContext:
     def __init__(self):
         self.setup_fresh_state()
+        tag(self)
 
     def setup_fresh_state(self):
         """
@@ -70,6 +75,7 @@ class WormContext:
             final.update(frame)
         return final
 
+    @tag
     @invalidate_progam
     def add(self, node, /, **injected):
         """
@@ -103,6 +109,7 @@ class WormContext:
 
         return node
 
+    @tag
     @invalidate_progam
     def entry(self, f):
         """
@@ -116,6 +123,7 @@ class WormContext:
         self.entry_point = f
         return f
 
+    @tag
     @invalidate_progam
     def export(self, f):
         """
@@ -129,6 +137,7 @@ class WormContext:
         self.exported.add(f.name)
         return f
 
+    @tag
     @invalidate_progam
     def block(self, f):
         """

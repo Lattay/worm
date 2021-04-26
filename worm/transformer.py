@@ -3,20 +3,22 @@ from .errors import WormSyntaxError
 from .import_hook import create_hook
 import ast
 from ast import (
-    ImportFrom,
     alias,
-    Expr,
-    Constant,
+    arguments,
     Assign,
-    Call,
-    keyword,
-    Name,
-    Load,
-    Store,
-    List,
-    Tuple,
-    Dict,
     Attribute,
+    Call,
+    Constant,
+    Dict,
+    Expr,
+    ImportFrom,
+    keyword,
+    Lambda,
+    List,
+    Load,
+    Name,
+    Store,
+    Tuple,
 )
 
 
@@ -86,7 +88,7 @@ class RewriteTopLevel(ast.NodeTransformer):
         if node.decorator_list:
             decorated_func = RewriteWorm().visit(node)
             lambda_func = make_lambda(decorated_func)
-            decorators = make_list(map(make_lambda, decorator_list))
+            decorators = make_list(map(make_lambda, node.decorator_list))
             apply = make_apply_decorator(decorators, lambda_func)
             node.decorator_list = [apply]
         if len(node.body) > 0 and is_docstring(node.body[0]):
@@ -100,8 +102,8 @@ class RewriteTopLevel(ast.NodeTransformer):
         if node.decorator_list:
             decorated_func = RewriteWorm().visit(node)
             lambda_func = make_lambda(decorated_func)
-            decorators = make_list(map(make_lambda, decorator_list))
-            apply = make_apply_decorators(decorator, lambda_func)
+            decorators = make_list(map(make_lambda, node.decorator_list))
+            apply = make_apply_decorator(decorators, lambda_func)
             node.decorator_list = [apply]
         if len(node.body) > 0 and is_docstring(node.body[0]):
             docstring, *body = node.body
@@ -735,6 +737,7 @@ def is_quoting(f):
                 "method",
             }
         )
+
 
 def make_apply_decorator(decorators, func):
     return Call(
