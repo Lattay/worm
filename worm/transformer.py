@@ -83,35 +83,32 @@ class RewriteTopLevel(ast.NodeTransformer):
         return node
 
     def visit_FunctionDef(self, node):
-        if any(is_quoting(dec) for dec in node.decorator_list):
+        if node.decorator_list:
             decorated_func = RewriteWorm().visit(node)
-            return make_assign(
-                copy_loc(node, Name(id=node.name, ctx=Store())),
-                decorated_func,
-            )
-
+            lambda_func = make_lambda(decorated_func)
+            decorators = make_list(map(make_lambda, decorator_list))
+            apply = make_apply_decorator(decorators, lambda_func)
+            node.decorator_list = [apply]
+        if len(node.body) > 0 and is_docstring(node.body[0]):
+            docstring, *body = node.body
+            node.body = [docstring, *map(self.visit, body)]
         else:
-            if len(node.body) > 0 and is_docstring(node.body[0]):
-                docstring, *body = node.body
-                node.body = [docstring, *map(self.visit, body)]
-            else:
-                node.body = list(map(self.visit, node.body))
-            return node
+            node.body = list(map(self.visit, node.body))
+        return node
 
     def visit_ClassDef(self, node):
-        if any(is_quoting(dec) for dec in node.decorator_list):
-            decorated_class = RewriteWorm().visit(node)
-            return make_assign(
-                copy_loc(node, Name(id=node.name, ctx=Store())),
-                decorated_class,
-            )
+        if node.decorator_list:
+            decorated_func = RewriteWorm().visit(node)
+            lambda_func = make_lambda(decorated_func)
+            decorators = make_list(map(make_lambda, decorator_list))
+            apply = make_apply_decorators(decorator, lambda_func)
+            node.decorator_list = [apply]
+        if len(node.body) > 0 and is_docstring(node.body[0]):
+            docstring, *body = node.body
+            node.body = [docstring, *map(self.visit, body)]
         else:
-            if len(node.body) > 0 and is_docstring(node.body[0]):
-                docstring, *body = node.body
-                node.body = [docstring, *map(self.visit, body)]
-            else:
-                node.body = list(map(self.visit, node.body))
-            return node
+            node.body = list(map(self.visit, node.body))
+        return node
 
     def visit_Call(self, node):
         if is_quoting(node.func):
@@ -703,6 +700,26 @@ def make_assign(target, value):
     )
 
 
+def make_lambda(expr):
+    """
+    Take an expression and return a lambda with no armuent evaluating that expression
+    """
+    return copy_loc(
+        expr,
+        Lambda(
+            args=arguments(),
+            body=expr,
+        )
+    )
+
+
+def make_list(gen):
+    """
+    Take some sort of iterable and produce a List node
+    """
+    return List(elts=list(gen), cts=Load())
+
+
 def is_quoting(f):
     if isinstance(f, Name):
         return f.id == "worm"
@@ -718,6 +735,13 @@ def is_quoting(f):
                 "method",
             }
         )
+
+def make_apply_decorator(decorators, func):
+    return Call(
+        func=Name(id="_worm_decorator_wrapper", ctx=Load()),
+        args=[decorators, func],
+        keywords=[],
+    ),
 
 
 def is_unquoting(f):

@@ -28,12 +28,5 @@ You can check out the [TODO list](TODO.md) to know where the project is and wher
 
 ## Caveats
 
-Worm decorators are recognized by name (`worm.decorator`) because the parser needs to recognize them before Python affected any meaning to the object, which means the user cannot do the following:
-```
-prog2 = WormContext()
-@prog2.entry
-def f():
-    return 2
-```
-
-The previous snippet will raise an error because the `WormContext` instance needs `WFuncDef` instances to be passed to `entry` but the `transformer` did not know that `prog2.entry` is actually a Worm decorator.
+Worm is highly experimental and I am not sure yet of what it should be.
+It probably don't work very well right now, but I hope to find time and motivation to change that.
