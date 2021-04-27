@@ -157,7 +157,15 @@ class Renaming(WormVisitor):
         frame = self.scope[-1][-1]
         if new_name is None:
             self._counter += 1
-            frame[base] = f"v{self._counter}_{base}"
+            if base not in self.symbols:
+                frame[base] = base
+            else:
+                counter = 2
+                n = f"{base}_{counter}"
+                while n in self.symbols:
+                    counter += 1
+                    n = f"{base}_{counter}"
+                frame[base] = n
         else:
             frame[base] = new_name
 

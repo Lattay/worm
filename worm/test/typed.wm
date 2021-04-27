@@ -1,23 +1,23 @@
 '''#include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-double v1_pow(double, int64_t);
+double pow(double, int64_t);
 void main(){
-printf("%f\\n", v1_pow(1.5, 4));
+printf("%f\\n", pow(1.5, 4));
 }
-double v1_pow(double v2_a, int64_t v3_n){
-double v4_result = 1.0;
-double v5_partial = v2_a;
-while(((v3_n > 0))){
-if((((v3_n % 2) == 1))){
-v4_result = (v4_result * v5_partial);
+double pow(double a, int64_t n){
+double result = 1.0;
+double partial = a;
+while(((n > 0))){
+if((((n % 2) == 1))){
+result = (result * partial);
 } else {
 
 }
-v5_partial = (v5_partial * v5_partial);
-v3_n = (v3_n // 2);
+partial = (partial * partial);
+n = (n // 2);
 }
-return v4_result;
+return result;
 }'''
 
 

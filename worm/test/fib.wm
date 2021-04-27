@@ -1,16 +1,16 @@
 """#include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-int v1_fib(int,int,int);
+int fib(int,int,int);
 void main(){
-printf("%d\\n", v1_fib(0, 1, 8));
-printf("%d\\n", v1_fib(0, 1, 10));
+printf("%d\\n", fib(0, 1, 8));
+printf("%d\\n", fib(0, 1, 10));
 }
-int v1_fib(int a, int b, int n) {
+int fib(int a, int b, int n) {
 while(n>0){
-int v2_c = a
+int c = a
 a = a + b
-b = v2_c
+b = c
 n -= 1
 }
 return a;
@@ -21,7 +21,7 @@ def fib(a: int, b: int, n: int = 1) -> int:
         c = a
         a = a + b
         b = c
-        n -= 1
+        n = n - 1
     return a
 
 @worm.entry
@@ -29,4 +29,3 @@ def main():
     printf("%d\n", fib(0, 1, 8))
     printf("%d\n", fib(0, 1, 10))
 
-print(worm.dump_source())

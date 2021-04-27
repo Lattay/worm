@@ -22,24 +22,25 @@ def test_fib():
 
     assert __doc__ == worm.dump_source()
 
-def test_type_check():
-    from .. import worm
-    # prevent inter test pollution
-    worm.setup_fresh_state()
 
-    from .typed import worm, __doc__
+# def test_type_check():
+#     from .. import worm
+#     # prevent inter test pollution
+#     worm.setup_fresh_state()
+#
+#     from .typed import worm, __doc__
+#
+#     assert __doc__ == worm.dump_source()
 
-    assert __doc__ == worm.dump_source()
 
-
-def test_custom_type():
-    from .. import worm
-    # prevent inter test pollution
-    worm.setup_fresh_state()
-
-    from .custom_type import worm, __doc__
-
-    assert __doc__ == worm.dump_source()
+# def test_custom_type():
+#     from .. import worm
+#     # prevent inter test pollution
+#     worm.setup_fresh_state()
+#
+#     from .custom_type import worm, __doc__
+#
+#     assert __doc__ == worm.dump_source()
 
 
 # def test_quote():
