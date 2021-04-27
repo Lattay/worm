@@ -85,6 +85,7 @@ class HigherOrderType(WormType, metaclass=MetaHigherOrderType):
 
 class SimpleType(WormType):
     def __init__(self, name):
+        super().__init__()
         self.name = name
 
     def type_to_c(self, _):

@@ -103,11 +103,16 @@ class PropagateAndCheckTypes(WormVisitor):
 
     def visit_topLevel(self, node):
         self.symbol_table = node.symbol_table
+        self.types = set()
 
-        return super().visit_topLevel(node)
+        tl = super().visit_topLevel(node)
+        tl.types = self.types
+
+        return tl
 
     def visit_name(self, node):
         node.type = self.symbol_table[node.name]
+        self.types.add(node.type)
         return node
 
     def visit_array(self, node):
@@ -121,6 +126,7 @@ class PropagateAndCheckTypes(WormVisitor):
         else:
             node.type = Array[None]
 
+        self.types.add(node.type)
         return node
 
     def visit_struct(self, node):
@@ -128,6 +134,7 @@ class PropagateAndCheckTypes(WormVisitor):
         node.type = Struct(
             **{key.name: val.type.deref() for key, val in node.fields}
         )
+        self.types.add(node.type)
         return node
 
     def visit_tuple(self, node):
@@ -137,16 +144,20 @@ class PropagateAndCheckTypes(WormVisitor):
         # FIXME take operator overloading in account
         node.operand = self.visit(node.operand)
         node.type = node.operand.type
+        self.types.add(node.type)
         return node
 
     def visit_ptr(self, node):
         node.value = self.visit(node.value)
         node.type = Ptr(node.value.type)
+        self.types.add(node.type)
         return node
 
     def visit_deref(self, node):
         node.value = self.visit(node.value)
         node.type = Deref(node.value.type)
+        self.types.add(node.type)
+        return node
 
     def visit_binary(self, node):
         # FIXME take operator overloading in account
@@ -161,6 +172,7 @@ class PropagateAndCheckTypes(WormVisitor):
             )
         node.left.type.ref(node.right.type)
         node.type = node.right.type
+        self.types.add(node.type)
         return node
 
     def visit_boolOp(self, node):
@@ -171,12 +183,14 @@ class PropagateAndCheckTypes(WormVisitor):
                 "Incompatible types in boolean operation.", at=node.src_pos
             )
         node.type = bool
+        self.types.add(node.type)
         return node
 
     def visit_compare(self, node):
         node.left = self.visit(node.left)
         node.rest = [(op, self.visit(val)) for op, val in node.rest]
         node.type = bool
+        self.types.add(node.type)
         return node
 
     def visit_ifExpr(self, node):
@@ -192,6 +206,7 @@ class PropagateAndCheckTypes(WormVisitor):
         node.test = self.visit(node.test)
         node.body.type = node.orelse.type
         node.type = node.body.type
+        self.types.add(node.type)
         return node
 
     def visit_getAttr(self, node):
@@ -201,6 +216,7 @@ class PropagateAndCheckTypes(WormVisitor):
             node.type = t.get_attr(node.attr)
         else:
             raise WormTypeError(f"The type {t} does not exposes attribute {node.attr}.")
+        self.types.add(node.type)
         return node
 
     def visit_getItem(self, node):
@@ -229,6 +245,7 @@ class PropagateAndCheckTypes(WormVisitor):
 
         self.symbol_table[target.name] = node.value.type
 
+        self.types.add(node.type)
         return node
 
     def visit_funcDef(self, node):
@@ -239,6 +256,7 @@ class PropagateAndCheckTypes(WormVisitor):
             node.returns = void
 
         self.current_function_return.pop()
+        self.types.add(node.type)
         return res
 
     def visit_return(self, node):
@@ -251,6 +269,7 @@ class PropagateAndCheckTypes(WormVisitor):
                 expect=self.current_function_return[-1],
                 got=node.value.type,
             )
+        self.types.add(node.type)
         return node
 
     def visit_call(self, node):
@@ -270,6 +289,7 @@ class PropagateAndCheckTypes(WormVisitor):
             )
 
         node.type = proto.returns
+        self.types.add(node.type)
         return node
 
 

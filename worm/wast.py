@@ -33,11 +33,15 @@ class WTopLevel(WAst):
         self.exported = set(exported)
         self.symbol_table = {}
         self.required = {}
+        self.types = set()
 
     def copy_common(self, other):
         if isinstance(other, WTopLevel):
+            self.functions = other.functions
+            self.exported = other.exported
             self.symbol_table = other.symbol_table
             self.required = other.required
+            self.types = other.types
 
         return super().copy_common(other)
 

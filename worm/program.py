@@ -50,6 +50,7 @@ class Program:
             ValidateMain(),
             AnnotateSymbols(scope),
             PropagateAndCheckTypes(scope),
+            CollectRequiredSymbols(),
             MakeCSource(),
         ]
 
@@ -299,10 +300,11 @@ class ValidateMain(WormVisitor):
 class CollectRequiredSymbols(WormVisitor):
     def __init__(self):
         self.required = {}
+        self.top_level_declarations = {}
 
     def visit_topLevel(self, node):
         functions = {f.name: f for f in node.functions}
-        types = {t.id: t for t in node.types}
+        types = {t.deref().id if isinstance(t.deref(), WormType) else str(t.deref()): t for t in node.types}
         if node.entry is not None:
             self.visit(node.entry)
         else:
@@ -312,9 +314,17 @@ class CollectRequiredSymbols(WormVisitor):
         diff = set(self.required.keys())
         while diff:
             prev = set(self.required.keys())
-            for symbol, val in diff.items():
-                if isinstance(val, WAst):
-                    self.visit(val)
+            for symbol in diff:
+                if symbol in self.top_level_declarations:
+                    self.required[symbol] = self.top_level_declarations[symbol]
+                    self.visit(self.required[symbol])
+                elif symbol in functions:
+                    self.required[symbol] = functions[symbol]
+                    self.visit(self.required[symbol])
+                elif symbol in types:
+                    self.required[symbol] = types[symbol]
+                else:
+                    print('not registered anywhere', symbol)
 
             diff = prev.difference(self.required.keys())
 
@@ -322,9 +332,15 @@ class CollectRequiredSymbols(WormVisitor):
 
         return node
 
+    def visit_name(self, name):
+        if name not in self.required:
+            print('Not required yet', name)
+            self.required[name] = None
+
     # FIXME collecter les symboles sans mettre des trucs locaux dans required
     # Probleme: Renaming sert justement à ne plus avoir besoin de connaitre le scope des
     # symboles alors comment faire le tri dans cette passe ?
+
 
 class MakeCSource(WormVisitor):
     def visit_topLevel(self, node):
@@ -339,6 +355,8 @@ class MakeCSource(WormVisitor):
                 proto = f.prototype
                 arg_list = ", ".join(to_c_type(type.deref()) for type in proto["args"])
                 code.append(to_c_type(proto["return"]) + f' {proto["name"]}({arg_list});')
+            else:
+                print(k, f)
 
         if node.entry is not None:
             code.append(self.visit(node.entry))
