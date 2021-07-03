@@ -1,4 +1,9 @@
-@worm
+from worm import new_prog
+
+
+prog = new_prog()
+
+@prog
 def repeat(s: str, n: int) -> str: int
     l: int = len(s)
     new_s: str = str.new(l * n)
@@ -7,7 +12,7 @@ def repeat(s: str, n: int) -> str: int
     return new_s
 
 
-@worm.entry
+@prog.entry
 def main():
     s: str = repeat("Hello !\n", 3)
     printf("%s", s)

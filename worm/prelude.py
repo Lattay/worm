@@ -1,6 +1,6 @@
 from .wast import WConstant, WPtr, WDeref
 from .type_checker import FunctionPrototype, check_type
-from .wtypes import void, char, Ptr, Array
+from .wtypes import void, char  # , Ptr, Array
 from .printf import parse_format
 
 
@@ -27,13 +27,13 @@ def formatconv_to_type(conv):
         return str
     elif conv == "c":
         return chr
-    elif conv == "p":
-        return Ptr(void)
+    # elif conv == "p":
+    #     return Ptr(void)
 
 
 prelude = {
     "printf": PrintfPrototype(),
-    "main": FunctionPrototype(int, int, Array[int]),
+    "main": FunctionPrototype(int),  # , int, Array[int]),
     "ptr": WPtr,
     "deref": WDeref,
     "int": int,

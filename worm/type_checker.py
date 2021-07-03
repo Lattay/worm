@@ -1,6 +1,6 @@
-from .errors import WormTypeError
+from .errors import WormTypeError, WormTypeInferenceError
 from .visitor import WormVisitor
-from .wtypes import is_atom_type, void
+from .wtypes import is_atom_type, void, from_name
 from .wast import WName, WStoreName
 
 
@@ -11,14 +11,29 @@ class AnnotateWithTypes(WormVisitor):
     def visit(self, node):
         if node is None:
             return None
-        if node.type is None:
-            node.type = self.subst.new_var()
+        node.type = self.treat_type(node.type)
         return super().visit(node)
 
     def visit_topLevel(self, node):
-        new_top = super().visit(node)
+        new_top = super().visit_topLevel(node)
         new_top.subst = self.subst
         return new_top
+
+    def visit_funcDef(self, node):
+        node.returns = self.treat_type(node.returns)
+        return super().visit_funcDef(node)
+
+    def treat_type(self, type_):
+        if type_ is None:
+            return self.subst.new_var()
+        elif isinstance(type_, WName):
+            t = from_name(type_.name)
+            if t:
+                return t
+            else:
+                raise WormTypeInferenceError(f"Unbound type name {type_}")
+        else:
+            return type_
 
 
 class FlattenTypes(WormVisitor):
@@ -29,15 +44,31 @@ class FlattenTypes(WormVisitor):
         if node is None:
             return None
         if self.subst is not None:
-            node.type = self.subst.resolve(node.type)
-            if isinstance(node.type, TypeVar):
-                raise WormTypeError("Dangling type", node.type, "")
+            node.type = self.treat_type(node.type)
+            if not node.type:
+                raise WormTypeInferenceError(f"Dangling type var for {node}", at=get_loc(node))
         return super().visit(node)
 
     def visit_topLevel(self, node):
-        node.subst = self.subst
-        new_top = super().visit(node)
+        self.subst = node.subst
+        new_top = super().visit_topLevel(node)
         return new_top
+
+    def visit_funcDef(self, node):
+        node.returns = self.treat_type(node.returns)
+        if not node.returns:
+            raise WormTypeInferenceError(f"Dangling type var for return type of {node.name}", at=get_loc(node))
+        return super().visit_funcDef(node)
+
+    def treat_type(self, type_):
+        if isinstance(type_, TypeVar):
+            res = self.subst.resolve(type_)
+            if isinstance(res, TypeVar):
+                return None
+            else:
+                return res
+        else:
+            return type_
 
 
 class ValidateMain(WormVisitor):
@@ -91,10 +122,11 @@ class UnifyTypes(WormVisitor):
         # FIXME take polymorphism in account
         node.operand = self.visit(node.operand)
         self.subst.unify_types(
-            node.op.type,
-            make_function_type(self.subst.new_var(), node.operand.type)
+            get_unary_op_type(node.op),
+            make_function_type(self.subst.new_var(), node.operand.type),
+            at=get_loc(node),
         )
-        self.subst.unify_types(node.type, node.op.type.return_type)
+        self.subst.unify_types(node.type, get_unary_op_type(node.op).ret_type, at=get_loc(node))
         return node
 
     # def visit_ptr(self, node):
@@ -112,25 +144,26 @@ class UnifyTypes(WormVisitor):
         node.left = self.visit(node.left)
         node.right = self.visit(node.right)
         self.subst.unify_types(
-            node.op.type,
-            make_function_type(self.subst.new_var(), node.left.type, node.right.type)
+            get_binary_op_type(node.op),
+            make_function_type(self.subst.new_var(), node.left.type, node.right.type),
+            at=get_loc(node),
         )
-        self.subst.unify_types(node.type, node.op.type.return_type)
+        self.subst.unify_types(node.type, get_binary_op_type(node.op).ret_type, at=get_loc(node))
         return node
 
     def visit_boolOp(self, node):
         # FIXME take operator overloading in account
         node.values = list(map(self.visit, node.values))
         for v in node.values:
-            self.subst.unify_types(bool, v.type)
-        self.subst.unify_types(bool, node.type)
+            self.subst.unify_types(bool, v.type, at=get_loc(v))
+        self.subst.unify_types(bool, node.type, at=get_loc(node))
         return node
 
     def visit_compare(self, node):
         node.left = self.visit(node.left)
         node.rest = [(op, self.visit(val)) for op, val in node.rest]
         # FIXME ensure types from left and rest are compatible with the operator
-        self.subst.unify_types(bool, node.type)
+        self.subst.unify_types(bool, node.type, at=get_loc(node))
         return node
 
     def visit_ifExpr(self, node):
@@ -138,17 +171,16 @@ class UnifyTypes(WormVisitor):
         node.orelse = self.visit(node.orelse)
         node.test = self.visit(node.test)
         self.subst.unify_types(bool, node.test.type)
-        self.subst.unify_types(node.body.type, node.orelse.type)
-        self.subst.unify_types(node.type, node.body.type)
+        self.subst.unify_types(node.body.type, node.orelse.type, at=get_loc(node.body))
+        self.subst.unify_types(node.type, node.body.type, at=get_loc(node))
         return node
 
     def visit_getAttr(self, node):
         node.value = self.visit(node.value)
-        t = node.value.type.deref()
-        if t.expose_attr(node.attr):
-            node.type = t.get_attr(node.attr)
-        else:
-            raise WormTypeError(f"The type {t} does not exposes attribute {node.attr}.")
+        # FIXME
+        # self.subst.unify_types(with_attr_type(node.value.name, node.value.type), node.type)
+
+        raise NotImplementedError("Type of attribute")
         return node
 
     def visit_getItem(self, node):
@@ -162,8 +194,8 @@ class UnifyTypes(WormVisitor):
         if len(node.targets) == 1:
             target = node.targets[0]
             if isinstance(target, WStoreName):
-                self.subst.unify_types(target.type, node.value.type)
-                self.subst.unify_types(node.type, target.type)
+                self.subst.unify_types(target.type, node.value.type, at=get_loc(node.value))
+                self.subst.unify_types(node.type, target.type, at=get_loc(node))
             else:
                 raise NotImplementedError(
                     f"Assignement to complex target: expected {WStoreName} but got {type(target)}."
@@ -178,8 +210,9 @@ class UnifyTypes(WormVisitor):
 
         self.subst.unify_types(
             res.type,
-            make_function_type(res.returns.type,
+            make_function_type(res.returns,
                                *(e.type for e in res.args)),
+            at=get_loc(res),
         )
 
         self.current_function_return.pop()
@@ -188,10 +221,7 @@ class UnifyTypes(WormVisitor):
     def visit_return(self, node):
         if node.value:
             node.value = self.visit(node.value)
-            self.subst.unify_types(node.value.type, self.current_function_return[-1])
-            self.subst.unify_types(node.type, node.value.type)
-        else:
-            self.subst.unify_types(node.type, void)
+            self.subst.unify_types(node.value.type, self.current_function_return[-1], at=get_loc(node.value))
         return node
 
     def visit_call(self, node):
@@ -205,6 +235,7 @@ class UnifyTypes(WormVisitor):
             make_function_type(node.type,
                                *(e.type for e in node.args)),
             node.func.type,
+            at=get_loc(node.func),
         )
 
         return node
@@ -247,13 +278,15 @@ class SubstitutionTable:
         type variable encountered, or it reaches a concreate type.
         """
 
+        assert var, "You cannot resolve None."
+
         while isinstance(var, TypeVar):
             prev = var
             var = self.vars[var.name]
 
         return var or prev
 
-    def unify_types(self, type_a, type_b):
+    def unify_types(self, type_a, type_b, at=None):
         """Unify type_a and type_b or raise a WormTypeError
         """
 
@@ -261,16 +294,16 @@ class SubstitutionTable:
         if isinstance(ta, TypeVar):
             self.vars[ta.name] = tb
         elif isinstance(tb, TypeVar):
-            self.unify_types(tb, ta)
+            self.unify_types(tb, ta, at=at)
         elif is_atom_type(ta) and is_atom_type(tb):
             if ta != tb:
-                raise WormTypeError("Could not unify these types", ta, tb)
+                raise WormTypeError("Could not unify these types", ta, tb, at=at)
         elif isinstance(ta, FunctionType) and isinstance(tb, FunctionType):
-            self.unify_types(ta.ret_type, tb.ret_type)
+            self.unify_types(ta.ret_type, tb.ret_type, at=at)
             for a, b in zip(ta.args_types, tb.args_types):
                 # FIXME consider different number of parameters
                 # FIXME consider function polymorphism
-                self.unify_types(a, b)
+                self.unify_types(a, b, at=at)
         else:
             raise WormTypeError("Could not unify these types", ta, tb)
 
@@ -292,3 +325,17 @@ def make_function_type(ret_type, *args_types):
 
 def check_type(expected, observed):
     pass
+
+
+def get_binary_op_type(op):
+    # FIXME Actually implement that
+    return make_function_type(int, int, int)
+
+
+def get_unary_op_type(op):
+    # FIXME Actually implement that
+    return make_function_type(int, int)
+
+
+def get_loc(node):
+    return node.src_pos

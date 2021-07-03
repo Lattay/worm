@@ -1,6 +1,9 @@
 import sys
+from worm import new_prog
 
-@worm.entry
+prog = new_prog()
+
+@prog.entry
 def b():
     n: int = 89
     printf("%d\n", n)

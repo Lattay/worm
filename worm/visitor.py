@@ -44,7 +44,7 @@ class WormVisitor:
     def visit_topLevel(self, node):
         return WTopLevel(
             entry=self.visit(node.entry),
-            functions=list(map(self.visit, node.functions)),
+            functions={name: self.visit(f) for name, f in node.functions.items()},
             headers=node.headers,
         ).copy_common(node)
 

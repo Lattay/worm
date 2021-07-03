@@ -110,14 +110,6 @@ class RewriteTopLevel(ast.NodeTransformer):
             node.body = list(map(self.visit, node.body))
         return node
 
-    def visit_Call(self, node):
-        if is_quoting(node.func):
-            node.args = [RewriteWorm().visit(arg) for arg in node.args]
-        else:
-            node.args = list(map(self.visit, node.args))
-            node.keywords = list(map(self.visit, node.keywords))
-        return node
-
 
 def wrap_last(prop):
     @wraps(prop)
@@ -703,7 +695,7 @@ def make_assign(target, value):
 
 def make_lambda(expr):
     """
-    Take an expression and return a lambda with no armuent evaluating that expression
+    Take an expression and return a thunk node evaluating to that expression
     """
     return copy_loc(
         expr,
@@ -747,30 +739,6 @@ def from_w(name, store=False):
     )
 
 
-def is_quoting(f):
-    if isinstance(f, Name):
-        return f.id == "worm"
-    elif isinstance(f, Attribute):
-        return (
-            isinstance(f.value, Name)
-            and f.value.id == "worm"
-            and f.attr
-            in {
-                "block",
-                "entry",
-                "exported",
-                "method",
-            }
-        )
-
-
-def is_unquoting(f):
-    if isinstance(f, Name):
-        return f.id in {"_x"}
-    else:
-        return False
-
-
 _op_table = {k: Constant(o) for k, o in _op_names.items()}
 
 
@@ -785,3 +753,7 @@ def is_docstring(node):
         and isinstance(node.value, Constant)
         and isinstance(node.value.value, str)
     )
+
+
+def is_unquoting(*args):
+    return False

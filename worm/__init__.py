@@ -1,37 +1,9 @@
-from .context import WormContext
+from .context import WormContext, WormMode
 
 
 def new_prog():
-    WormContext()
+    return WormContext(mode=WormMode.PROGRAM)
 
 
-class WormMaster:
-    @staticmethod
-    def entry(prog):
-        def dec(func, **kwargs):
-            prog.entry(func, **kwargs)
-            return func
-        return dec
-
-    @staticmethod
-    def export(prog):
-        def dec(func, **kwargs):
-            prog.export(func, **kwargs)
-            return func
-        return dec
-
-    @staticmethod
-    def block(prog):
-        def dec(func, **kwargs):
-            prog.block(func, **kwargs)
-            return func
-        return dec
-
-    def __call__(self, prog):
-        def dec(func, **kwargs):
-            prog.add(func, **kwargs)
-            return func
-        return dec
-
-
-worm = WormMaster()
+def new_lib():
+    return WormContext(mode=WormMode.LIBRARY)

@@ -20,21 +20,26 @@ void main(){
 }
 '''
 
-with worm.any_type as T:
-    @worm.method(Array[T])
+from worm import new_prog
+from worm.wtypes import Array, TypeVar
+
+prog = new_prog()
+
+with TypeVar() as T:
+    @prog.method(Array[T])
     def reduce(self, fn, init: T):
         acc = init
         for i in range(self.length):
             acc = fn(acc, f[i])
-        return acc;
+        return acc
 
 
-@worm
+@prog.add
 def add(a: int, b: int):
     return a + b
 
 
-@worm.entry
+@prog.entry
 def f():
     a = [1, 2, 3, 4]
     preintf("%d\n", a.reduce(add, 0))

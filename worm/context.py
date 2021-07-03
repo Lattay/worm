@@ -1,11 +1,11 @@
-from contextlib import contextmanager
 from functools import wraps
+from enum import Enum, auto
+
+from .errors import WormContextError
 
 from .wast import (
-    WAst,
     WFuncDef,
     WClass,
-    WExpr,
     WBlock,
 )
 from .program import Program
@@ -25,8 +25,14 @@ def invalidate_progam(f):
     return wrapper
 
 
+class WormMode(Enum):
+    PROGRAM = auto()
+    LIBRARY = auto()
+
+
 class WormContext:
-    def __init__(self):
+    def __init__(self, mode=WormMode.PROGRAM):
+        self.mode = mode
         self.setup_fresh_state()
         tag(self)
 
@@ -34,71 +40,41 @@ class WormContext:
         """
         Clear all states and setup the context for a new program.
         """
-        self.functions = set()
-        self.classes = set()
+        self.functions = {}
+        self.classes = {}
         self.entry_point = None
         self.exported = set()
 
-        self._scope = [{}]
         self._program = None
 
     @property
     def program(self):
+        if self.mode == WormMode.PROGRAM and self.entry_point is None:
+            raise WormContextError("The program have no entry point.")
+
         if self._program is None:
             self._program = Program.from_context(self)
 
         return self._program
-
-    def add_to_scope(self, name, value):
-        self._scope[-1][name] = value
-
-    @contextmanager
-    def scope(self, **kwargs):
-        """
-        Create a new scope for Worm. Keyword parameters bound Worm names to
-        Python values. Those value should be compatible with Worm (either types
-        or function/classes).
-        """
-        frame = kwargs
-        self._scope.append(frame)
-        try:
-            yield
-        finally:
-            self._scope.pop()
-
-    def flat_scope(self):
-        """
-        Return a flat snapshot of the current scope.
-        """
-        final = {}
-        for frame in self._scope:
-            final.update(frame)
-        return final
 
     @tag
     @invalidate_progam
     def add(self, node, /, **injected):
         """
         Used as a decorator or as a function, take a Worm function, class or
-        expression. Class and functions are added to the current scope.
-        Expression are not, and should be later used in function classes. The
-        resulting python value is return and, in case of a decorator, bound to
-        the class/function name.
+        expression. The resulting python value is return and, in case of a
+        decorator, bound to the class/function name.
         """
         if isinstance(node, WFuncDef):
             assert (
                 not injected
             ), "worm.add does not accept keyword arguments with function definition parameter."
-            self.add_to_scope(node.name, node)
-            node.attached = self.flat_scope()
-            self.functions.add(node)
+            self.functions[node.name] = node
         elif isinstance(node, WClass):
             assert (
                 not injected
             ), "worm.add does not accept keyword arguments with class definition parameter."
-            self.add_to_scope(node.name, node)
-            node.attached = self.flat_scope()
-            self.classes.add(node)
+            self.classes[node.name] = node
         else:
             b = WBlock([node]).copy_common(node)
 
@@ -115,8 +91,6 @@ class WormContext:
         """
         Take a worm function and register it as the program entry point.
         """
-        self.add_to_scope(f.name, f)
-        f.attached = self.flat_scope()
         assert isinstance(
             f, WFuncDef
         ), "Only a function can be taken as an entry point."
@@ -129,8 +103,9 @@ class WormContext:
         """
         Take a worm function and register it as an exported function.
         """
-        self.add_to_scope(f.name, f)
-        f.attached = self.flat_scope()
+        if self.mode == WormMode.PROGRAM:
+            raise WormContextError("A program cannot export functions.")
+
         assert isinstance(
             f, WFuncDef
         ), "Only a function can be exported."  # FIXME export types too
@@ -164,15 +139,11 @@ class WormContext:
             b = f.body
 
             b.hygienic = True
-
-            with self.scope(**injected):
-                b.attached = self.flat_scope()
             b.injected = injected
+
             return b
 
         wrapper._wrapped_block = True
-
-        self.add_to_scope(f.name, wrapper)
 
         return wrapper
 
@@ -203,11 +174,3 @@ class WormContext:
         The file parameter may be a string (filename) or a file-like object.
         """
         return self.program.save_program(file)
-
-    def expand(self, f, **kwargs):
-        """
-        Expand a "macro" inside a Worm block.
-        """
-        if kwargs:
-            raise NotImplementedError()
-        return f

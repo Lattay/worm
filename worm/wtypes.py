@@ -39,6 +39,9 @@ class SimpleType(WormType):
         super().__init__()
         self.name = name
 
+    def __repr__(self):
+        return f"SimpleType({self.name!r})"
+
     def type_to_c(self, _):
         return self.name
 
@@ -74,3 +77,15 @@ def is_atom_type(t):
         float,
         str,
     } or isinstance(t, SimpleType)
+
+
+def from_name(t):
+    return {
+        "int": int,
+        "bool": bool,
+        "float": float,
+        "str": str,
+        "void": void,
+        "char": char,
+    }.get(t, None)
+

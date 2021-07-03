@@ -1,7 +1,10 @@
+from worm import new_prog
+
+prog = new_prog()
 Result = Sum(ok=float, error=str)
 
-with worm.scope(ok=Result.ok, error=Result.error):
-    @worm
+with prog.scope(ok=Result.ok, error=Result.error):
+    @prog
     def sqrt(a: float) -> Result:
         if a >= 0:
             a_n = a

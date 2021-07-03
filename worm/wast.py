@@ -1,4 +1,5 @@
 from .errors import WormTypeError
+from .wtypes import void
 
 
 class WAst:
@@ -16,11 +17,12 @@ class WTopLevel(WAst):
     def __init__(self, *, entry=None, functions=(), headers=(), exported=(), **kwargs):
         super().__init__(**kwargs)
         self.entry = entry
-        self.functions = list(functions)
+        self.functions = dict(functions)
         self.headers = list(headers)
         self.exported = set(exported)
         self.symbol_table = {}
         self.required = {}
+        self.subst = None
 
     def copy_common(self, other):
         if isinstance(other, WTopLevel):
@@ -28,13 +30,15 @@ class WTopLevel(WAst):
             self.exported = other.exported
             self.symbol_table = other.symbol_table
             self.required = other.required
-            self.subst_table = other.subst_table
+            self.subst = other.subst
 
         return super().copy_common(other)
 
 
 class WStatement(WAst):
-    pass
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.type = void
 
 
 class WExpr(WAst):
@@ -271,21 +275,22 @@ class WFuncDef(WStatement):
         self.args = list(args)
         self.defaults = list(defaults)
         self.body = body
-        self._returns = returns
-        self.attached = {}
+        self.returns = returns
+        self.free_vars = set()
+        self.type = None
 
     @property
     def prototype(self):
         return {
             "name": self.name,
-            "return": self.returns.deref(),
+            "return": self.returns,
             "args": [arg.type for arg in self.args],
         }
 
     def copy_common(self, other):
         super().copy_common(other)
         if isinstance(other, WFuncDef):
-            self.attached = other.attached
+            self.free_vars = other.free_vars
             self.docstring = other.docstring
         return self
 
@@ -304,6 +309,7 @@ class WClass(WStatement):
         self.bases = list(bases)
         self.body = body
         self.docstring = docstring
+        self.type = None
 
     def copy_common(self, other):
         if isinstance(other, WClass):
