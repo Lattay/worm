@@ -1,27 +1,15 @@
 from .errors import WormTypeError
-from .wtypes import merge_types as _merge_types
 
 
 class WAst:
     def __init__(self, *, src_pos=None):
-        self._type = Ref(None)
+        self.type = None
         self.src_pos = src_pos
 
     def copy_common(self, other):
         self.src_pos = other.src_pos
         self.type = other.type
         return self
-
-    @property
-    def type(self):
-        return self._type
-
-    @type.setter
-    def type(self, new):
-        if isinstance(self._type, Ref):
-            self._type.ref(new)
-        else:
-            self._type = Ref(new)
 
 
 class WTopLevel(WAst):
@@ -33,7 +21,6 @@ class WTopLevel(WAst):
         self.exported = set(exported)
         self.symbol_table = {}
         self.required = {}
-        self.types = set()
 
     def copy_common(self, other):
         if isinstance(other, WTopLevel):
@@ -41,7 +28,7 @@ class WTopLevel(WAst):
             self.exported = other.exported
             self.symbol_table = other.symbol_table
             self.required = other.required
-            self.types = other.types
+            self.subst_table = other.subst_table
 
         return super().copy_common(other)
 
@@ -215,7 +202,7 @@ class WAssign(WStatement):
         super().__init__(**kwargs)
         self.targets = list(targets)
         self.value = value
-        self.type = annotation or self.type
+        self.type = annotation
 
 
 class WRaise(WStatement):
@@ -284,19 +271,8 @@ class WFuncDef(WStatement):
         self.args = list(args)
         self.defaults = list(defaults)
         self.body = body
-        self._returns = Ref(returns)
+        self._returns = returns
         self.attached = {}
-
-    @property
-    def returns(self):
-        return self._returns
-
-    @returns.setter
-    def returns(self, new):
-        if isinstance(self._returns, Ref):
-            self._returns.ref(new)
-        else:
-            self._returns = Ref(new)
 
     @property
     def prototype(self):
@@ -369,45 +345,3 @@ class WDeref(WPrimitiveExpr):
             raise WormTypeError("deref does not accept keyword arguments.", at=val)
 
         self.value = val
-
-
-class Ref:
-    def __init__(self, value):
-        self.refered = value
-
-    def _root(self):
-        if isinstance(self.refered, Ref):
-            return self.refered._root()
-        else:
-            return self
-
-    def deref(self):
-        return self._root().refered
-
-    def ref(self, value):
-        self._root()._ref(value)
-
-    def _ref(self, value):
-        """
-        self MUST be its own root
-        """
-        if isinstance(value, Ref):
-            root = value._root()
-            if root is self:
-                pass
-            else:
-                self.refered = root
-        else:
-            self.refered = value
-
-    def __repr__(self):
-        return f"Ref({repr(self.deref())})"
-
-
-def merge_types(a, b):
-    new_type = Ref(_merge_types(a.deref(), b.deref()))
-    if new_type is None:
-        return None
-    a.ref(new_type)
-    b.ref(a)
-    return new_type

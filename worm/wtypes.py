@@ -200,12 +200,12 @@ def to_c_type(type_):
         raise NotImplementedError(f"{type_} is not a valid type.")
 
 
-def merge_types(a, b):
-    """
-    Should be used to merge partial types.
-    """
-    # TODO
-    if a == b:
-        return a
-    else:
-        return None
+def is_atom_type(t):
+    return t in {
+        int,
+        float,
+        str,
+        bool,
+        void,
+        char,
+    }

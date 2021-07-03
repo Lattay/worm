@@ -1,22 +1,37 @@
 from .context import WormContext
-from functools import reduce
 
 
-worm = WormContext()
+def new_prog():
+    WormContext()
 
 
-def _worm_decorator_wrapper(decorators, worm_func):
-    def dec(func):
-        evaled_decs = []
-        for dec in decorators:
-            evaled = dec()
-            if is_worm_method(evaled):
-                return worm_func()
-            else:
-                evaled_decs.append(evaled)
-        return reduce(lambda f, v: f(v), evaled_decs, func)
-    return dec
+class WormMaster:
+    @staticmethod
+    def entry(prog):
+        def dec(func, **kwargs):
+            prog.entry(func, **kwargs)
+            return func
+        return dec
+
+    @staticmethod
+    def export(prog):
+        def dec(func, **kwargs):
+            prog.export(func, **kwargs)
+            return func
+        return dec
+
+    @staticmethod
+    def block(prog):
+        def dec(func, **kwargs):
+            prog.block(func, **kwargs)
+            return func
+        return dec
+
+    def __call__(self, prog):
+        def dec(func, **kwargs):
+            prog.add(func, **kwargs)
+            return func
+        return dec
 
 
-def is_worm_method(thing):
-    return getattr(thing, "_worm_method_tag", False)
+worm = WormMaster()

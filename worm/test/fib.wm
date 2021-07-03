@@ -15,7 +15,12 @@ n -= 1
 }
 return a;
 }"""
-@worm
+
+from worm import new_prog, worm
+
+prog = new_prog()
+
+@worm(prog)
 def fib(a: int, b: int, n: int = 1) -> int:
     while n > 0:
         c = a
@@ -24,7 +29,7 @@ def fib(a: int, b: int, n: int = 1) -> int:
         n = n - 1
     return a
 
-@worm.entry
+@worm.entry(prog)
 def main():
     printf("%d\n", fib(0, 1, 8))
     printf("%d\n", fib(0, 1, 10))

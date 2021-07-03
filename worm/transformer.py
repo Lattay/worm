@@ -55,9 +55,7 @@ _op_names = {
 
 
 prelude = [
-    ImportFrom(module="worm", names=[alias(name="worm"), alias(name="_worm_decorator_wrapper")], level=0),
-    ImportFrom(module="worm.wast", names=[alias(name="*")], level=0),
-    ImportFrom(module="worm.wtypes", names=[alias(name="*")], level=0),
+    ImportFrom(module="worm", names=[alias(name="magics", asname="_w")], level=0),
 ]
 
 
@@ -243,6 +241,7 @@ class RewriteWorm(ast.NodeTransformer):
                 node.func = copy_loc(
                     n,
                     Attribute(
+                        # FIXME that shit will explode
                         value=copy_loc(n, Name(id="worm", ctx=Load())),
                         attr="expand",
                         ctx=Load(),
@@ -630,7 +629,7 @@ def make_node(node, name, values=[]):
     return copy_loc(
         node,
         Call(
-            func=copy_loc(node, Name(id="W" + name[0].upper() + name[1:], ctx=Load())),
+            func=copy_loc(node, from_w("W" + name[0].upper() + name[1:])),
             args=list(values),
             keywords=[
                 keyword(
@@ -733,10 +732,18 @@ def make_apply_decorator(decorators, func):
     return copy_loc(
         func,
         Call(
-            func=copy_loc(func, Name(id="_worm_decorator_wrapper", ctx=Load())),
+            func=copy_loc(func, from_w("worm_decorator_wrapper")),
             args=[decorators, func],
             keywords=[],
         ),
+    )
+
+
+def from_w(name, store=False):
+    return Attribute(
+        value=Name(id="_w", ctx=Load()),
+        attr=name,
+        ctx=Store() if store else Load(),
     )
 
 

@@ -1,12 +1,12 @@
-from .wast import WConstant, Ref, WPtr, WDeref
+from .wast import WConstant, WPtr, WDeref
 from .type_checker import FunctionPrototype, check_type
 from .wtypes import void, char, Ptr, Array
 from .printf import parse_format
 
 
-class PrintfChecker(FunctionPrototype):
+class PrintfPrototype(FunctionPrototype):
     def __init__(self):
-        self.returns = Ref(void)
+        self.returns = void
 
     def check_args(self, format, *args):
         if not isinstance(format, WConstant) or format.type.deref() != str:
@@ -32,8 +32,8 @@ def formatconv_to_type(conv):
 
 
 prelude = {
-    "printf": Ref(PrintfChecker()),
-    "main": Ref(FunctionPrototype(int, int, Array[int])),
+    "printf": PrintfPrototype(),
+    "main": FunctionPrototype(int, int, Array[int]),
     "ptr": WPtr,
     "deref": WDeref,
     "int": int,

@@ -20,8 +20,12 @@ n = (n // 2);
 return result;
 }'''
 
+from worm import new_prog, worm
 
-@worm
+prog = new_prog()
+
+
+@worm(prog)
 def pow(a: float, n: int) -> float:
     result: float = 1.0
     partial: float = a
@@ -33,6 +37,6 @@ def pow(a: float, n: int) -> float:
     return result
 
 
-@worm.entry
+@worm.entry(prog)
 def main():
     printf("%f\n", pow(1.5, 4))  # print 5.062500

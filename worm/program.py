@@ -16,7 +16,7 @@ from .wast import (
 )
 from .prelude import prelude
 from .wtypes import to_c_type, void, WormType, Array
-from .type_checker import ResolveTypes, AnnotateSymbols, PropagateAndCheckTypes
+from .type_checker import AnnotateWithTypes, UnifyTypes
 
 
 class Program:
@@ -46,11 +46,10 @@ class Program:
         pipeline = [
             Unsugar(),
             Renaming(scope),
-            ResolveTypes(scope),
             ValidateMain(),
-            AnnotateSymbols(scope),
-            PropagateAndCheckTypes(scope),
-            CollectRequiredSymbols(),
+            AnnotateWithTypes(scope),
+            UnifyTypes(scope),
+            # CollectRequiredSymbols(),
             MakeCSource(),
         ]
 

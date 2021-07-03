@@ -4,33 +4,21 @@ hook(debug=False)
 
 
 def test_hygienic():
-    from .. import worm
-    # prevent inter test pollution
-    worm.setup_fresh_state()
+    from .hygienic import prog, __doc__
 
-    from .hygienic import worm, __doc__
-
-    assert __doc__ == worm.dump_source()
+    assert __doc__ == prog.dump_source()
 
 
 def test_fib():
-    from .. import worm
-    # prevent inter test pollution
-    worm.setup_fresh_state()
+    from .fib import prog, __doc__
 
-    from .fib import worm, __doc__
-
-    assert __doc__ == worm.dump_source()
+    assert __doc__ == prog.dump_source()
 
 
-# def test_type_check():
-#     from .. import worm
-#     # prevent inter test pollution
-#     worm.setup_fresh_state()
-#
-#     from .typed import worm, __doc__
-#
-#     assert __doc__ == worm.dump_source()
+def test_type_check():
+    from .typed import prog, __doc__
+
+    assert __doc__ == prog.dump_source()
 
 
 # def test_custom_type():
