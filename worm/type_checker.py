@@ -21,6 +21,36 @@ class AnnotateWithTypes(WormVisitor):
         return new_top
 
 
+class FlattenTypes(WormVisitor):
+    def __init__(self):
+        self.subst = None
+
+    def visit(self, node):
+        if node is None:
+            return None
+        if self.subst is not None:
+            node.type = self.subst.resolve(node.type)
+            if isinstance(node.type, TypeVar):
+                raise WormTypeError("Dangling type", node.type, "")
+        return super().visit(node)
+
+    def visit_topLevel(self, node):
+        node.subst = self.subst
+        new_top = super().visit(node)
+        return new_top
+
+
+class ValidateMain(WormVisitor):
+    def visit_topLevel(self, node):
+        # FIXME authorize main parameters ?
+        if node.entry is not None:
+            if node.entry.returns is None:
+                node.entry.type = make_function_type(void)
+            else:
+                node.entry.type = make_function_type(int)
+        return node
+
+
 class UnifyTypes(WormVisitor):
     """
     This visitor will apply the relations between node types

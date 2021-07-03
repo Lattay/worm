@@ -15,8 +15,9 @@ from .wast import (
     WExpr,
 )
 from .prelude import prelude
-from .wtypes import to_c_type, void, WormType, Array
-from .type_checker import AnnotateWithTypes, UnifyTypes
+from .wtypes import to_c_type, WormType, Array
+
+from .type_checker import AnnotateWithTypes, ValidateMain, UnifyTypes, FlattenTypes
 
 
 class Program:
@@ -49,7 +50,7 @@ class Program:
             ValidateMain(),
             AnnotateWithTypes(scope),
             UnifyTypes(scope),
-            # CollectRequiredSymbols(),
+            FlattenTypes(),
             MakeCSource(),
         ]
 
@@ -117,6 +118,11 @@ class Renaming(WormVisitor):
     This visitor rename variables to use a unique symbol for each variable in the program.
     """
 
+    # FIXME This visitor should also collect free variables from functions
+    # to create the list of required symbols
+    # Also self.symbols is useless now, maybe there is a way of killing two birds
+    # with one stone
+
     def __init__(self, prelude, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._counter = 0
@@ -124,13 +130,6 @@ class Renaming(WormVisitor):
         self.scope = [[extract_name_from_scope(prelude)]]
         self.symbols = set()
         self.globals = {}
-
-    # internals
-    # def get_name(self, base):
-    #     known_name = self.in_scope(base)
-    #     if known_name is None:
-    #         known_name = self.add_to_scope(base)
-    #     return known_name
 
     def in_local_scope(self, base):
         """
@@ -278,74 +277,23 @@ class Renaming(WormVisitor):
         return n
 
 
-class ValidateMain(WormVisitor):
-    def visit_topLevel(self, node):
-        if node.entry is not None:
-            if node.entry.returns.deref() is None:
-                node.entry.returns = void
-                self.returns = void
-            else:
-                self.returns = int
-                node.entry.returns = int
-            self.visit(node.entry.body)
-
-        return node
-
-    def visit_return(self, node):
-        if self.returns.deref() == void:
-            if node.value is not None:
-                raise WormTypeError(
-                    "The entry point has a non void return.", at=node.src_pos
-                )
-        elif node.value.type.deref() != int:
-            raise WormTypeError(
-                "The entry point has a non int return.", at=node.src_pos
-            )
-
-
-class CollectRequiredSymbols(WormVisitor):
+class CollectRequiredTypes(WormVisitor):
     def __init__(self):
-        self.required = {}
-        self.top_level_declarations = {}
+        self.types = set()
+        self.subst = None
+
+    def visit(self, node):
+        if node is None:
+            return None
+        if self.subst:
+            self.types.add(self.subst.resolve(node.type))
+        return super().visit(node)
 
     def visit_topLevel(self, node):
-        functions = {f.name: f for f in node.functions}
-        types = {t.deref().id if isinstance(t.deref(), WormType) else str(t.deref()): t for t in node.types}
-        if node.entry is not None:
-            self.visit(node.entry)
-        else:
-            for f in node.exported:
-                self.required[f.name] = f
-                self.visit(f)
-        diff = set(self.required.keys())
-        while diff:
-            prev = set(self.required.keys())
-            for symbol in diff:
-                if symbol in self.top_level_declarations:
-                    self.required[symbol] = self.top_level_declarations[symbol]
-                    self.visit(self.required[symbol])
-                elif symbol in functions:
-                    self.required[symbol] = functions[symbol]
-                    self.visit(self.required[symbol])
-                elif symbol in types:
-                    self.required[symbol] = types[symbol]
-                else:
-                    print('not registered anywhere', symbol)
-
-            diff = prev.difference(self.required.keys())
-
-        node.required = self.required
-
-        return node
-
-    def visit_name(self, name):
-        if name not in self.required:
-            print('Not required yet', name)
-            self.required[name] = None
-
-    # FIXME collecter les symboles sans mettre des trucs locaux dans required
-    # Probleme: Renaming sert justement à ne plus avoir besoin de connaitre le scope des
-    # symboles alors comment faire le tri dans cette passe ?
+        self.subst = node.subst
+        new_top = super().visit(node)
+        new_top.types = self.types
+        return new_top
 
 
 class MakeCSource(WormVisitor):
@@ -362,7 +310,7 @@ class MakeCSource(WormVisitor):
         for k, f in node.required.items():
             if isinstance(f, WFuncDef):
                 proto = f.prototype
-                arg_list = ", ".join(to_c_type(type.deref()) for type in proto["args"])
+                arg_list = ", ".join(to_c_type(type) for type in proto["args"])
                 code.append(to_c_type(proto["return"]) + f' {proto["name"]}({arg_list});')
             else:
                 print(k, f)
@@ -382,7 +330,7 @@ class MakeCSource(WormVisitor):
             return repr(node.value)
 
     def visit_array(self, node):
-        return Array(node.elements.type.deref()).value_to_c(
+        return node.type.value_to_c(
             list(map(self.visit, node.elements))
         )
 
@@ -391,7 +339,7 @@ class MakeCSource(WormVisitor):
 
     def visit_struct(self, node):
         return (
-            f"({to_c_type(node.type.deref())}){{"
+            f"({to_c_type(node.type)}){{"
             + ", ".join(f".{self.visit(name)}={self.visit(val)}" for name, val in node.fields)
             + "}"
         )
@@ -475,7 +423,7 @@ class MakeCSource(WormVisitor):
         expr = self.visit(node.value)
 
         if target.declaration:
-            return f"{to_c_type(node.type.deref())} {target.name} = {expr};"
+            return f"{to_c_type(node.type)} {target.name} = {expr};"
         else:
             return f"{target.name} = {expr};"
 
@@ -524,8 +472,8 @@ class MakeCSource(WormVisitor):
             else:
                 raise NotImplementedError(f"We got a {name}={value} in attached values of {node.name}")
         body = self.visit(node.body)
-        returns = to_c_type(node.returns.deref())
-        args = [f"{to_c_type(arg.type.deref())} {arg.name}" for arg in node.args]
+        returns = to_c_type(node.returns)
+        args = [f"{to_c_type(arg.type)} {arg.name}" for arg in node.args]
         arg_list = ", ".join(args)
         head = f"{returns} {node.name}({arg_list}){{"
         return "\n".join(prelude + [head, body, "}"])
