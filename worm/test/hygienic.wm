@@ -11,6 +11,10 @@ c = c_2;
 printf("%d %d %d\\n", a, b, c);
 }'''
 
+from worm import context
+
+worm = context.new_prog()
+
 @worm.block
 def swap(a, b):
     c = a
@@ -24,5 +28,3 @@ def f():
     c: int = 4
     swap(a=b, b=c)
     printf("%d %d %d\n", a, b, c)  # print 1 4 3
-
-import sys

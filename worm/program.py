@@ -57,7 +57,6 @@ class Program:
         def transform(node):
             return reduce(lambda n, t: t.visit(n), pipeline, node)
 
-
         top_level = WTopLevel(
             entry=self.entry_point, functions=self.functions, headers=headers, exported=self.exported
         )
@@ -351,6 +350,9 @@ class CollectRequiredSymbols(WormVisitor):
 
 
 class MakeCSource(WormVisitor):
+    def __init__(self):
+        self.functions = set()
+
     def visit_topLevel(self, node):
         code = node.headers
 
@@ -516,11 +518,11 @@ class MakeCSource(WormVisitor):
             if isinstance(value, (int, bool, float, str)):
                 t = to_c_type(type(value))
                 prelude.append(f"{t} {name} = {repr(value)};")
+            elif isinstance(value, (WFuncDef,)):
+                self.functions.add(value)
             elif isinstance(value, (WormType, type(lambda: 0))):
                 pass  # we probably don't need that
             else:
-                continue
-                # FIXME there is really to many things, we may need to split attached into two separate things again
                 raise NotImplementedError(f"We got a {name}={value} in attached values of {node.name}")
         body = self.visit(node.body)
         returns = to_c_type(node.returns.deref())
