@@ -34,6 +34,9 @@ from .wast import (
 
 
 class WormVisitor:
+    def __init__(self, *args):
+        pass
+
     def visit(self, node):
         if node is None:
             return None

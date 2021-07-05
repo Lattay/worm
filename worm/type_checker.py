@@ -5,12 +5,8 @@ from .wast import WName, WStoreName
 
 
 class IntroduceSymbolTypes(WormVisitor):
-    def __init__(self):
-        self.symbol_table = None
-
-    def visit_topLevel(self, node):
-        self.symbol_table = node.symbol_table
-        return super().visit_topLevel(node)
+    def __init__(self, metadata):
+        self.symbol_table = metadata.symbol_table
 
     def visit_name(self, node):
         node.type = self.symbol_table.get(node.name, None)
@@ -18,19 +14,14 @@ class IntroduceSymbolTypes(WormVisitor):
 
 
 class AnnotateWithTypes(WormVisitor):
-    def __init__(self):
-        self.subst = SubstitutionTable()
+    def __init__(self, metadata):
+        self.subst = metadata.subst = SubstitutionTable()
 
     def visit(self, node):
         if node is None:
             return None
         node.type = self.treat_type(node.type)
         return super().visit(node)
-
-    def visit_topLevel(self, node):
-        new_top = super().visit_topLevel(node)
-        new_top.subst = self.subst
-        return new_top
 
     def visit_funcDef(self, node):
         node.returns = self.treat_type(node.returns)
@@ -50,8 +41,8 @@ class AnnotateWithTypes(WormVisitor):
 
 
 class FlattenTypes(WormVisitor):
-    def __init__(self):
-        self.subst = None
+    def __init__(self, metadata):
+        self.subst = metadata.subst
 
     def visit(self, node):
         if node is None:
@@ -61,11 +52,6 @@ class FlattenTypes(WormVisitor):
             if not node.type:
                 raise WormTypeInferenceError(f"Dangling type var for {node}", at=get_loc(node))
         return super().visit(node)
-
-    def visit_topLevel(self, node):
-        self.subst = node.subst
-        new_top = super().visit_topLevel(node)
-        return new_top
 
     def visit_funcDef(self, node):
         node.returns = self.treat_type(node.returns)
@@ -86,7 +72,6 @@ class FlattenTypes(WormVisitor):
 
 class ValidateMain(WormVisitor):
     def visit_topLevel(self, node):
-        # FIXME authorize main parameters ?
         if node.entry is not None:
             if node.entry.returns is None:
                 node.entry.type = make_function_type(void)
@@ -100,15 +85,9 @@ class UnifyTypes(WormVisitor):
     This visitor will apply the relations between node types
     """
 
-    def __init__(self):
+    def __init__(self, metadata):
         self.current_function_return = []
-
-    def visit_topLevel(self, node):
-        self.subst = node.subst
-
-        tl = super().visit_topLevel(node)
-
-        return tl
+        self.subst = metadata.subst
 
     # def visit_array(self, node):
     #     super().visit_array(node)

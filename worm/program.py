@@ -1,7 +1,7 @@
 from functools import reduce
 from contextlib import contextmanager
 
-from .errors import WormBindingError
+from .errors import WormBindingError, WormClosureError
 
 from .visitor import WormVisitor
 from .wast import (
@@ -22,32 +22,35 @@ from .type_checker import AnnotateWithTypes, ValidateMain, UnifyTypes, FlattenTy
 
 
 class Program:
-    def __init__(self, entry_point, functions, exported):
+    def __init__(self, entry_point, functions, exported, blocks):
         self.entry_point = entry_point
         self.functions = functions
         self.exported = exported
+        self.blocks = blocks
 
     @classmethod
     def from_context(cls, context):
-        return cls(context.entry_point, context.functions, context.exported)
+        return cls(context.entry_point, context.functions, context.exported, context.blocks)
 
     def dump_source(self):
         headers = ["#include <stdio.h>", "#include <stdlib.h>", "#include <stdint.h>"]
 
-        scope = {**prelude}
+        metadata = MetaDataStorage()
+        metadata.scope = {**prelude}
+        metadata.blocks = self.blocks
 
         pipeline = [
-            Unsugar(),
-            Renaming(),
-            CollectRequiredSymbols(),
-            InjectExternalSymbols(scope),
-            IntroduceSymbolTypes(),
-            ValidateMain(),
-            AnnotateWithTypes(),
-            UnifyTypes(),
-            FlattenTypes(),
-            CollectRequiredTypes(),
-            MakeCSource(scope),
+            UnsugarBlocks(metadata),
+            Renaming(metadata),
+            CollectRequiredSymbols(metadata),
+            InjectExternalSymbols(metadata),
+            IntroduceSymbolTypes(metadata),
+            ValidateMain(metadata),
+            AnnotateWithTypes(metadata),
+            UnifyTypes(metadata),
+            FlattenTypes(metadata),
+            CollectRequiredTypes(metadata),
+            MakeCSource(metadata),
         ]
 
         def transform(node):
@@ -73,35 +76,29 @@ class Program:
         pass
 
 
-class InjectExternalSymbols:
-    def __init__(self, scope):
-        self.scope = scope
+class InjectExternalSymbols(WormVisitor):
+    def __init__(self, metadata):
+        self.scope = metadata.scope
+        self.required = metadata.required
 
-    def visit(self, top_level):
-        for name in top_level.required:
+    def visit_topLevel(self, top_level):
+        for name in self.required:
             if name in top_level.functions:
                 self.scope[name] = top_level.functions[name].type
 
-        missing = set(top_level.required.keys()).difference(self.scope.keys())
+        missing = set(self.required.keys()).difference(self.scope.keys())
         if missing:
             raise WormBindingError(f"Unbound symbol(s) {missing}")
         else:
             top_level.type_table = {
-                name: self.scope[name] for name, symbol in top_level.required.items()
+                name: self.scope[name] for name, symbol in self.required.items()
             }
         return top_level
 
 
-class Unsugar(WormVisitor):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.scope = [{}]
-
-    def lookup(self, name):
-        for frame in reversed(self.scope):
-            if name in frame:
-                return frame[name]
-        return None
+class UnsugarBlocks(WormVisitor):
+    def __init__(self, metadata):
+        self.blocks = metadata.blocks
 
     def visit_funcDef(self, node):
         return super().visit_funcDef(node)
@@ -117,13 +114,19 @@ class Unsugar(WormVisitor):
 
     def visit_call(self, node):
         if isinstance(node.func, WName):
-            bind = self.lookup(node.func.name)
+            bind = self.blocks.get(node.func.name, None)
             if bind:
-                if getattr(bind, "_wrapped_block", False):
-                    return bind(*node.args, **node.kwargs)
-                elif getattr(bind, "_primitive", False):
-                    return bind(super().visit_call(node))
+                return bind(*node.args, **node.kwargs)
         return super().visit_call(node)
+
+
+class PreventClosure(WormVisitor):
+    def __init__(self, _):
+        self.in_function = False
+
+    def visit_funcDef(self, node):
+        if self.in_function:
+            raise WormClosureError(f"Illegal nested function {node.name}", at=node.src_pos)
 
 
 class Renaming(WormVisitor):
@@ -136,7 +139,7 @@ class Renaming(WormVisitor):
     # Also self.symbols is useless now, maybe there is a way of killing two birds
     # with one stone
 
-    def __init__(self):
+    def __init__(self, _):
         self._counter = 0
         self.scope = []
         self.current_function = []
@@ -206,7 +209,6 @@ class Renaming(WormVisitor):
             headers=node.headers,
         ).copy_common(node)
 
-        # top_level.symbols = self.symbols
         return top_level
 
     def visit_funcDef(self, node):
@@ -284,9 +286,11 @@ class Renaming(WormVisitor):
 
 
 class CollectRequiredTypes(WormVisitor):
-    def __init__(self):
-        self.types = set()
-        self.subst = None
+    """ This visitor fill the top_level.types set with type specs.
+    """
+    def __init__(self, metadata):
+        self.types = metadata.types = set()
+        self.subst = metadata.subst
 
     def visit(self, node):
         if node is None:
@@ -295,16 +299,12 @@ class CollectRequiredTypes(WormVisitor):
             self.types.add(self.subst.resolve(node.type))
         return super().visit(node)
 
-    def visit_topLevel(self, node):
-        self.subst = node.subst
-        new_top = super().visit_topLevel(node)
-        new_top.types = self.types
-        return new_top
-
 
 class CollectRequiredSymbols(WormVisitor):
-    def __init__(self):
-        self.required = {}
+    """ This visitor fills the top_level.required dict with required local functions.
+    """
+    def __init__(self, metadata):
+        self.required = metadata.required = {}
 
     def visit_topLevel(self, node):
         if node.entry:
@@ -329,14 +329,14 @@ class CollectRequiredSymbols(WormVisitor):
 
         self.required.update({name: None for name in other})
 
-        node.required = self.required
-
         return node
 
 
 class MakeCSource(WormVisitor):
-    def __init__(self, prelude):
-        self.prelude = prelude
+    """ This visitor produce C sources from the AST
+    """
+    def __init__(self, metadata):
+        self.prelude = metadata.scope
         self.functions = {}
 
     def visit_topLevel(self, node):
@@ -518,3 +518,11 @@ class MakeCSource(WormVisitor):
 
 def extract_name_from_scope(scope):
     return {name: name for name in scope}
+
+
+class MetaDataStorage:
+    def __init__(self):
+        self.symbol_table = {}
+        self.required = {}
+        self.subst = None
+        self.blocks = {}

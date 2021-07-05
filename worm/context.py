@@ -44,6 +44,7 @@ class WormContext:
         self.classes = {}
         self.entry_point = None
         self.exported = set()
+        self.blocks = {}
 
         self._program = None
 
@@ -143,7 +144,7 @@ class WormContext:
 
             return b
 
-        wrapper._wrapped_block = True
+        self.blocks[f.name] = wrapper
 
         return wrapper
 

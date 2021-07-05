@@ -4,7 +4,7 @@ from .wtypes import void
 
 class WAst:
     def __init__(self, *, src_pos=None):
-        self.type = None
+        self.type = void
         self.src_pos = src_pos
 
     def copy_common(self, other):
@@ -20,29 +20,23 @@ class WTopLevel(WAst):
         self.functions = dict(functions)
         self.headers = list(headers)
         self.exported = set(exported)
-        self.symbol_table = {}
-        self.required = {}
-        self.subst = None
 
     def copy_common(self, other):
         if isinstance(other, WTopLevel):
             self.functions = other.functions
             self.exported = other.exported
-            self.symbol_table = other.symbol_table
-            self.required = other.required
-            self.subst = other.subst
 
         return super().copy_common(other)
 
 
 class WStatement(WAst):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.type = void
+    pass
 
 
 class WExpr(WAst):
-    pass
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.type = None
 
 
 class WExprStatement(WStatement):
@@ -111,6 +105,7 @@ class WName(WAst):
 class WStoreName(WAst):
     def __init__(self, name, **kwargs):
         super().__init__(**kwargs)
+        self.type = None
         self.name = name
         self.declaration = False
 
@@ -172,7 +167,7 @@ class WGetAttr(WExpr):
         self.attr = attr
 
 
-class WSetAttr(WAst):
+class WSetAttr(WExpr):
     def __init__(self, value, attr, **kwargs):
         super().__init__(**kwargs)
         self.value = value

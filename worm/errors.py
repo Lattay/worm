@@ -32,3 +32,7 @@ class WormSyntaxError(WormError):
 
 class WormBindingError(WormError):
     pass
+
+
+class WormClosureError(WormError):
+    pass
