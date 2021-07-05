@@ -4,6 +4,19 @@ from .wtypes import is_atom_type, void, from_name
 from .wast import WName, WStoreName
 
 
+class IntroduceSymbolTypes(WormVisitor):
+    def __init__(self):
+        self.symbol_table = None
+
+    def visit_topLevel(self, node):
+        self.symbol_table = node.symbol_table
+        return super().visit_topLevel(node)
+
+    def visit_name(self, node):
+        node.type = self.symbol_table.get(node.name, None)
+        return super().visit_name(node)
+
+
 class AnnotateWithTypes(WormVisitor):
     def __init__(self):
         self.subst = SubstitutionTable()

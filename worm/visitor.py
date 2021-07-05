@@ -192,6 +192,11 @@ class WormVisitor:
         return WReturn(self.visit(node.value)).copy_common(node)
 
 
+class WormPseudoVisitor:
+    def visit(self, node):
+        pass
+
+
 def reformat(name):
     assert name.startswith("W")
     return name[1].lower() + name[2:]

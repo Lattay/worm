@@ -1,6 +1,8 @@
 from functools import reduce
 from contextlib import contextmanager
 
+from .errors import WormBindingError
+
 from .visitor import WormVisitor
 from .wast import (
     WTopLevel,
@@ -16,7 +18,7 @@ from .wast import (
 from .prelude import prelude
 from .wtypes import to_c_type
 
-from .type_checker import AnnotateWithTypes, ValidateMain, UnifyTypes, FlattenTypes
+from .type_checker import AnnotateWithTypes, ValidateMain, UnifyTypes, FlattenTypes, IntroduceSymbolTypes
 
 
 class Program:
@@ -37,12 +39,14 @@ class Program:
         pipeline = [
             Unsugar(),
             Renaming(),
+            CollectRequiredSymbols(),
+            InjectExternalSymbols(scope),
+            IntroduceSymbolTypes(),
             ValidateMain(),
             AnnotateWithTypes(),
             UnifyTypes(),
             FlattenTypes(),
             CollectRequiredTypes(),
-            CollectRequiredSymbols(),
             MakeCSource(scope),
         ]
 
@@ -67,6 +71,25 @@ class Program:
 
     def save_library(self, filename):
         pass
+
+
+class InjectExternalSymbols:
+    def __init__(self, scope):
+        self.scope = scope
+
+    def visit(self, top_level):
+        for name in top_level.required:
+            if name in top_level.functions:
+                self.scope[name] = top_level.functions[name].type
+
+        missing = set(top_level.required.keys()).difference(self.scope.keys())
+        if missing:
+            raise WormBindingError(f"Unbound symbol(s) {missing}")
+        else:
+            top_level.type_table = {
+                name: self.scope[name] for name, symbol in top_level.required.items()
+            }
+        return top_level
 
 
 class Unsugar(WormVisitor):
@@ -304,7 +327,8 @@ class CollectRequiredSymbols(WormVisitor):
             self.required.update(added)
             diff = req.difference(self.required.keys())
 
-        print("free symbols that are not functions", other)
+        self.required.update({name: None for name in other})
+
         node.required = self.required
 
         return node

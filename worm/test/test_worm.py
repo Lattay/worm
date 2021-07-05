@@ -26,14 +26,14 @@ def test_type_check():
 #     # prevent inter test pollution
 #     worm.setup_fresh_state()
 #
-#     from .custom_type import worm, __doc__
+#     from .custom_type import prog, __doc__
 #
-#     assert __doc__ == worm.dump_source()
+#     assert __doc__ == prog.dump_source()
 
 
 # def test_quote():
-#     from .quote import worm, __doc__
-#     assert worm.dump_source() == __doc__
+#     from .quote import prog, __doc__
+#     assert prog.dump_source() == __doc__
 
 
 if __name__ == "__main__":
