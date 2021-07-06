@@ -109,6 +109,9 @@ class WStoreName(WAst):
         self.name = name
         self.declaration = False
 
+    def __repr__(self):
+        return f"WStoreName({self.name!r})"
+
     def copy_common(self, other):
         if isinstance(other, WStoreName):
             self.declaration = other.declaration
@@ -200,8 +203,13 @@ class WAssign(WStatement):
     def __init__(self, targets, value, annotation=None, **kwargs):
         super().__init__(**kwargs)
         self.targets = list(targets)
+
+        # FIXME
+        if len(self.targets) > 1:
+            raise NotImplementedError("Multiple assignment target is not supported yet.")
+
         self.value = value
-        self.type = annotation
+        self.annotation = annotation
 
 
 class WRaise(WStatement):

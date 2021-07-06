@@ -1,0 +1,16 @@
+"""#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+void main(){
+int64_t a = 1;
+int64_t b = a;
+}"""
+
+from worm import new_prog
+
+prog = new_prog()
+
+@prog.entry
+def f():
+    a = 1
+    b = a

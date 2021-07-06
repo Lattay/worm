@@ -3,6 +3,18 @@ from ..transformer import hook
 hook(debug=False)
 
 
+def test_no_inference():
+    from .no_inference import prog, __doc__
+
+    assert __doc__ == prog.dump_source()
+
+
+def test_minimal_type_inference():
+    from .minimal_type_inference import prog, __doc__
+
+    assert __doc__ == prog.dump_source()
+
+
 def test_hygienic():
     from .hygienic import prog, __doc__
 

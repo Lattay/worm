@@ -41,6 +41,7 @@ class Program:
 
         pipeline = [
             UnsugarBlocks(metadata),
+            UnsugarMultipleAssign(metadata),
             Renaming(metadata),
             CollectRequiredSymbols(metadata),
             InjectExternalSymbols(metadata),
@@ -49,6 +50,7 @@ class Program:
             AnnotateWithTypes(metadata),
             UnifyTypes(metadata),
             FlattenTypes(metadata),
+            TypeAssignment(metadata),
             CollectRequiredTypes(metadata),
             MakeCSource(metadata),
         ]
@@ -118,6 +120,14 @@ class UnsugarBlocks(WormVisitor):
             if bind:
                 return bind(*node.args, **node.kwargs)
         return super().visit_call(node)
+
+
+class UnsugarMultipleAssign(WormVisitor):
+    """This visitor will transform multi-target assignement into several simple assignements"""
+    def visit_assign(self, node):
+        if len(node.targets) != 1:
+            raise NotImplementedError("Multiple target assignement is not implemented yet.")
+        return node
 
 
 class PreventClosure(WormVisitor):
@@ -332,23 +342,33 @@ class CollectRequiredSymbols(WormVisitor):
         return node
 
 
+class TypeAssignment(WormVisitor):
+    def visit_assign(self, node):
+        target = node.targets[0]
+        if target.declaration:
+            node.type = target.type
+        return node
+
+
 class MakeCSource(WormVisitor):
     """ This visitor produce C sources from the AST
     """
     def __init__(self, metadata):
         self.prelude = metadata.scope
+        self.types = metadata.types
+        self.required = metadata.required
         self.functions = {}
 
     def visit_topLevel(self, node):
         code = node.headers
 
         print("Required types")
-        for t in node.types:
+        for t in self.types:
             print(t)
             # code.append(t.declaration(to_c_type))
 
         print("Required symbols")
-        for k, f in node.required.items():
+        for k, f in self.required.items():
             if isinstance(f, WFuncDef):
                 proto = f.prototype
                 arg_list = ", ".join(to_c_type(type) for type in proto["args"])
@@ -455,8 +475,6 @@ class MakeCSource(WormVisitor):
         raise NotImplementedError()
 
     def visit_assign(self, node):
-        if len(node.targets) > 1:
-            raise NotImplementedError()
         target = node.targets[0]
         if not isinstance(target, WStoreName):
             raise NotImplementedError(target)

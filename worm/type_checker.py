@@ -7,15 +7,26 @@ from .wast import WName, WStoreName
 class IntroduceSymbolTypes(WormVisitor):
     def __init__(self, metadata):
         self.symbol_table = metadata.symbol_table
+        self.subst = metadata.subst = SubstitutionTable()
 
     def visit_name(self, node):
-        node.type = self.symbol_table.get(node.name, None)
+        if node.name in self.symbol_table:
+            node.type = self.symbol_table[node.name]
+        else:
+            node.type = self.symbol_table[node.name] = self.subst.new_var()
+        return super().visit_name(node)
+
+    def visit_storeName(self, node):
+        if node.name in self.symbol_table:
+            raise Exception("That's a bug I think.")
+        else:
+            node.type = self.symbol_table[node.name] = self.subst.new_var()
         return super().visit_name(node)
 
 
 class AnnotateWithTypes(WormVisitor):
     def __init__(self, metadata):
-        self.subst = metadata.subst = SubstitutionTable()
+        self.subst = metadata.subst
 
     def visit(self, node):
         if node is None:
@@ -47,10 +58,11 @@ class FlattenTypes(WormVisitor):
     def visit(self, node):
         if node is None:
             return None
-        if self.subst is not None:
-            node.type = self.treat_type(node.type)
-            if not node.type:
+        if self.subst is not None and node.type is not None:
+            type_ = self.treat_type(node.type)
+            if not type_:
                 raise WormTypeInferenceError(f"Dangling type var for {node}", at=get_loc(node))
+            node.type = type_
         return super().visit(node)
 
     def visit_funcDef(self, node):
@@ -183,17 +195,15 @@ class UnifyTypes(WormVisitor):
 
     def visit_assign(self, node):
         node.value = self.visit(node.value)
-        if len(node.targets) == 1:
-            target = node.targets[0]
-            if isinstance(target, WStoreName):
-                self.subst.unify_types(target.type, node.value.type, at=get_loc(node.value))
-                self.subst.unify_types(node.type, target.type, at=get_loc(node))
-            else:
-                raise NotImplementedError(
-                    f"Assignement to complex target: expected {WStoreName} but got {type(target)}."
-                )
+        target = node.targets[0]
+        if isinstance(target, WStoreName):
+            if node.annotation:
+                self.subst.unify_types(target.type, node.annotation, at=get_loc(node.value))
+            self.subst.unify_types(target.type, node.value.type, at=get_loc(node.value))
         else:
-            raise NotImplementedError("Multiple targets in assignment")
+            raise NotImplementedError(
+                f"Assignement to complex target: expected {WStoreName} but got {type(target)}."
+            )
         return node
 
     def visit_funcDef(self, node):
@@ -303,6 +313,9 @@ class SubstitutionTable:
 class TypeVar:
     def __init__(self, name):
         self.name = name
+
+    def __repr__(self):
+        return f"<TypeVar {id(self.name)}>"
 
 
 class FunctionType:
