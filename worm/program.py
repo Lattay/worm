@@ -18,7 +18,13 @@ from .wast import (
 from .prelude import prelude
 from .wtypes import to_c_type
 
-from .type_checker import AnnotateWithTypes, ValidateMain, UnifyTypes, FlattenTypes, IntroduceSymbolTypes
+from .type_checker import (
+    AnnotateWithTypes,
+    ValidateMain,
+    UnifyTypes,
+    FlattenTypes,
+    IntroduceSymbolTypes,
+)
 
 
 class Program:
@@ -30,7 +36,9 @@ class Program:
 
     @classmethod
     def from_context(cls, context):
-        return cls(context.entry_point, context.functions, context.exported, context.blocks)
+        return cls(
+            context.entry_point, context.functions, context.exported, context.blocks
+        )
 
     def dump_source(self):
         headers = ["#include <stdio.h>", "#include <stdlib.h>", "#include <stdint.h>"]
@@ -43,6 +51,7 @@ class Program:
             UnsugarBlocks(metadata),
             UnsugarMultipleAssign(metadata),
             Renaming(metadata),
+            Debug(metadata),
             CollectRequiredSymbols(metadata),
             InjectExternalSymbols(metadata),
             IntroduceSymbolTypes(metadata),
@@ -59,7 +68,10 @@ class Program:
             return reduce(lambda n, t: t.visit(n), pipeline, node)
 
         top_level = WTopLevel(
-            entry=self.entry_point, functions=self.functions, headers=headers, exported=self.exported
+            entry=self.entry_point,
+            functions=self.functions,
+            headers=headers,
+            exported=self.exported,
         )
 
         return transform(top_level)
@@ -124,9 +136,12 @@ class UnsugarBlocks(WormVisitor):
 
 class UnsugarMultipleAssign(WormVisitor):
     """This visitor will transform multi-target assignement into several simple assignements"""
+
     def visit_assign(self, node):
         if len(node.targets) != 1:
-            raise NotImplementedError("Multiple target assignement is not implemented yet.")
+            raise NotImplementedError(
+                "Multiple target assignement is not implemented yet."
+            )
         return node
 
 
@@ -136,24 +151,20 @@ class PreventClosure(WormVisitor):
 
     def visit_funcDef(self, node):
         if self.in_function:
-            raise WormClosureError(f"Illegal nested function {node.name}", at=node.src_pos)
+            raise WormClosureError(
+                f"Illegal nested function {node.name}", at=node.src_pos
+            )
 
 
 class Renaming(WormVisitor):
-    """
-    This visitor rename variables to use a unique symbol for each variable in the program.
+    """This visitor rename variables to use a unique symbol for each variable
+    in the program.
     """
 
-    # FIXME This visitor should also collect free variables from functions
-    # to create the list of required symbols
-    # Also self.symbols is useless now, maybe there is a way of killing two birds
-    # with one stone
-
-    def __init__(self, _):
-        self._counter = 0
+    def __init__(self, metadata):
         self.scope = []
         self.current_function = []
-        self.symbols = set()
+        self.symbols = set(metadata.scope.keys())
 
     def in_local_scope(self, base):
         """
@@ -177,7 +188,6 @@ class Renaming(WormVisitor):
     def add_to_scope(self, base, new_name=None):
         frame = self.scope[-1][-1]
         if new_name is None:
-            self._counter += 1
             if base not in self.symbols:
                 frame[base] = base
             else:
@@ -292,12 +302,13 @@ class Renaming(WormVisitor):
             declaration = True
         n = WStoreName(renamed).copy_common(node)
         n.declaration = declaration
+        print(n, n.declaration)
         return n
 
 
 class CollectRequiredTypes(WormVisitor):
-    """ This visitor fill the top_level.types set with type specs.
-    """
+    """This visitor fill the top_level.types set with type specs."""
+
     def __init__(self, metadata):
         self.types = metadata.types = set()
         self.subst = metadata.subst
@@ -311,8 +322,8 @@ class CollectRequiredTypes(WormVisitor):
 
 
 class CollectRequiredSymbols(WormVisitor):
-    """ This visitor fills the top_level.required dict with required local functions.
-    """
+    """This visitor fills the top_level.required dict with required local functions."""
+
     def __init__(self, metadata):
         self.required = metadata.required = {}
 
@@ -351,8 +362,8 @@ class TypeAssignment(WormVisitor):
 
 
 class MakeCSource(WormVisitor):
-    """ This visitor produce C sources from the AST
-    """
+    """This visitor produce C sources from the AST"""
+
     def __init__(self, metadata):
         self.prelude = metadata.scope
         self.types = metadata.types
@@ -364,15 +375,18 @@ class MakeCSource(WormVisitor):
 
         print("Required types")
         for t in self.types:
-            print(t)
+            pass
             # code.append(t.declaration(to_c_type))
+        print(self.types)
 
         print("Required symbols")
         for k, f in self.required.items():
             if isinstance(f, WFuncDef):
                 proto = f.prototype
                 arg_list = ", ".join(to_c_type(type) for type in proto["args"])
-                code.append(to_c_type(proto["return"]) + f' {proto["name"]}({arg_list});')
+                code.append(
+                    to_c_type(proto["return"]) + f' {proto["name"]}({arg_list});'
+                )
             else:
                 print(k, f)
 
@@ -386,14 +400,12 @@ class MakeCSource(WormVisitor):
 
     def visit_constant(self, node):
         if isinstance(node.value, str):
-            return "\"" + repr(node.value)[1:-1] + "\""
+            return '"' + repr(node.value)[1:-1] + '"'
         else:
             return repr(node.value)
 
     def visit_array(self, node):
-        return node.type.value_to_c(
-            list(map(self.visit, node.elements))
-        )
+        return node.type.value_to_c(list(map(self.visit, node.elements)))
 
     def visit_tuple(self, node):
         raise NotImplementedError()
@@ -401,7 +413,9 @@ class MakeCSource(WormVisitor):
     def visit_struct(self, node):
         return (
             f"({to_c_type(node.type)}){{"
-            + ", ".join(f".{self.visit(name)}={self.visit(val)}" for name, val in node.fields)
+            + ", ".join(
+                f".{self.visit(name)}={self.visit(val)}" for name, val in node.fields
+            )
             + "}"
         )
 
@@ -544,3 +558,9 @@ class MetaDataStorage:
         self.required = {}
         self.subst = None
         self.blocks = {}
+
+
+class Debug(WormVisitor):
+    def visit_storeName(self, node):
+        print(node, node.declaration)
+        return node

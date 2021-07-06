@@ -113,9 +113,10 @@ class WStoreName(WAst):
         return f"WStoreName({self.name!r})"
 
     def copy_common(self, other):
+        super().copy_common(other)
         if isinstance(other, WStoreName):
             self.declaration = other.declaration
-        return super().copy_common(other)
+        return self
 
 
 class WUnary(WExpr):
@@ -206,7 +207,9 @@ class WAssign(WStatement):
 
         # FIXME
         if len(self.targets) > 1:
-            raise NotImplementedError("Multiple assignment target is not supported yet.")
+            raise NotImplementedError(
+                "Multiple assignment target is not supported yet."
+            )
 
         self.value = value
         self.annotation = annotation

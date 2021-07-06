@@ -46,6 +46,17 @@ class SimpleType(WormType):
         return self.name
 
 
+class FunctionType(WormType):
+    def __init__(self, ret_type, args_types):
+        super().__init__()
+        self.ret_type = ret_type
+        self.args_types = args_types
+
+
+def make_function_type(ret_type, *args_types):
+    return FunctionType(ret_type, args_types)
+
+
 void = SimpleType("void")
 char = SimpleType("char")
 
@@ -71,12 +82,16 @@ def to_c_type(type_):
 
 
 def is_atom_type(t):
-    return t in {
-        int,
-        bool,
-        float,
-        str,
-    } or isinstance(t, SimpleType)
+    return (
+        t
+        in {
+            int,
+            bool,
+            float,
+            str,
+        }
+        or isinstance(t, SimpleType)
+    )
 
 
 def from_name(t):
@@ -88,4 +103,3 @@ def from_name(t):
         "void": void,
         "char": char,
     }.get(t, None)
-

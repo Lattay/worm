@@ -18,4 +18,5 @@ def worm_decorator_wrapper(decorators, worm_func):
             else:
                 evaled_decs.append(evaled)
         return _reduce(lambda f, v: f(v), evaled_decs, func)
+
     return dec

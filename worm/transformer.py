@@ -86,7 +86,9 @@ class RewriteTopLevel(ast.NodeTransformer):
         if node.decorator_list:
             decorated_func = RewriteWorm().visit(node)
             lambda_func = make_lambda(decorated_func)
-            decorators = make_list(node.decorator_list[0], map(make_lambda, node.decorator_list))
+            decorators = make_list(
+                node.decorator_list[0], map(make_lambda, node.decorator_list)
+            )
             apply = make_apply_decorator(decorators, lambda_func)
             node.decorator_list = [apply]
         if len(node.body) > 0 and is_docstring(node.body[0]):
@@ -100,7 +102,9 @@ class RewriteTopLevel(ast.NodeTransformer):
         if node.decorator_list:
             decorated_func = RewriteWorm().visit(node)
             lambda_func = make_lambda(decorated_func)
-            decorators = make_list(node.decorator_list[0], map(make_lambda, node.decorator_list))
+            decorators = make_list(
+                node.decorator_list[0], map(make_lambda, node.decorator_list)
+            )
             apply = make_apply_decorator(decorators, lambda_func)
             node.decorator_list = [apply]
         if len(node.body) > 0 and is_docstring(node.body[0]):
@@ -709,7 +713,7 @@ def make_lambda(expr):
                 defaults=[],
             ),
             body=expr,
-        )
+        ),
     )
 
 

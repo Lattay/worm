@@ -1,10 +1,9 @@
 from .wast import WConstant, WPtr, WDeref
-from .type_checker import FunctionPrototype, check_type
-from .wtypes import void, char  # , Ptr, Array
+from .wtypes import void, char, FunctionType, make_function_type  # , Ptr, Array
 from .printf import parse_format
 
 
-class PrintfPrototype(FunctionPrototype):
+class PrintfPrototype(FunctionType):
     def __init__(self):
         self.returns = void
 
@@ -33,7 +32,9 @@ def formatconv_to_type(conv):
 
 prelude = {
     "printf": PrintfPrototype(),
-    "main": FunctionPrototype(int),  # , int, Array[int]),
+    "println": make_function_type(void, str),
+    "print_int": make_function_type(void, int),
+    "main": make_function_type(int),  # , int, Array[int]),
     "ptr": WPtr,
     "deref": WDeref,
     "int": int,

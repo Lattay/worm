@@ -1,27 +1,29 @@
 from .errors import WormTypeError, WormTypeInferenceError
 from .visitor import WormVisitor
-from .wtypes import is_atom_type, void, from_name
+from .wtypes import is_atom_type, void, from_name, make_function_type, FunctionType
 from .wast import WName, WStoreName
 
 
 class IntroduceSymbolTypes(WormVisitor):
     def __init__(self, metadata):
+        self.scope = metadata.scope
         self.symbol_table = metadata.symbol_table
         self.subst = metadata.subst = SubstitutionTable()
 
     def visit_name(self, node):
-        if node.name in self.symbol_table:
-            node.type = self.symbol_table[node.name]
-        else:
-            node.type = self.symbol_table[node.name] = self.subst.new_var()
+        node.type = self.get_type_from_name(node.name)
         return super().visit_name(node)
 
     def visit_storeName(self, node):
-        if node.name in self.symbol_table:
-            raise Exception("That's a bug I think.")
-        else:
-            node.type = self.symbol_table[node.name] = self.subst.new_var()
-        return super().visit_name(node)
+        node.type = self.get_type_from_name(node.name)
+        return super().visit_storeName(node)
+
+    def get_type_from_name(self, name):
+        if name in self.scope:
+            return self.scope[name]
+        elif name not in self.symbol_table:
+            self.symbol_table[name] = self.subst.new_var()
+        return self.symbol_table[name]
 
 
 class AnnotateWithTypes(WormVisitor):
@@ -61,14 +63,18 @@ class FlattenTypes(WormVisitor):
         if self.subst is not None and node.type is not None:
             type_ = self.treat_type(node.type)
             if not type_:
-                raise WormTypeInferenceError(f"Dangling type var for {node}", at=get_loc(node))
+                raise WormTypeInferenceError(
+                    f"Dangling type var for {node}", at=get_loc(node)
+                )
             node.type = type_
         return super().visit(node)
 
     def visit_funcDef(self, node):
         node.returns = self.treat_type(node.returns)
         if not node.returns:
-            raise WormTypeInferenceError(f"Dangling type var for return type of {node.name}", at=get_loc(node))
+            raise WormTypeInferenceError(
+                f"Dangling type var for return type of {node.name}", at=get_loc(node)
+            )
         return super().visit_funcDef(node)
 
     def treat_type(self, type_):
@@ -130,7 +136,9 @@ class UnifyTypes(WormVisitor):
             make_function_type(self.subst.new_var(), node.operand.type),
             at=get_loc(node),
         )
-        self.subst.unify_types(node.type, get_unary_op_type(node.op).ret_type, at=get_loc(node))
+        self.subst.unify_types(
+            node.type, get_unary_op_type(node.op).ret_type, at=get_loc(node)
+        )
         return node
 
     # def visit_ptr(self, node):
@@ -152,7 +160,9 @@ class UnifyTypes(WormVisitor):
             make_function_type(self.subst.new_var(), node.left.type, node.right.type),
             at=get_loc(node),
         )
-        self.subst.unify_types(node.type, get_binary_op_type(node.op).ret_type, at=get_loc(node))
+        self.subst.unify_types(
+            node.type, get_binary_op_type(node.op).ret_type, at=get_loc(node)
+        )
         return node
 
     def visit_boolOp(self, node):
@@ -198,7 +208,9 @@ class UnifyTypes(WormVisitor):
         target = node.targets[0]
         if isinstance(target, WStoreName):
             if node.annotation:
-                self.subst.unify_types(target.type, node.annotation, at=get_loc(node.value))
+                self.subst.unify_types(
+                    target.type, node.annotation, at=get_loc(node.value)
+                )
             self.subst.unify_types(target.type, node.value.type, at=get_loc(node.value))
         else:
             raise NotImplementedError(
@@ -212,8 +224,7 @@ class UnifyTypes(WormVisitor):
 
         self.subst.unify_types(
             res.type,
-            make_function_type(res.returns,
-                               *(e.type for e in res.args)),
+            make_function_type(res.returns, *(e.type for e in res.args)),
             at=get_loc(res),
         )
 
@@ -223,7 +234,11 @@ class UnifyTypes(WormVisitor):
     def visit_return(self, node):
         if node.value:
             node.value = self.visit(node.value)
-            self.subst.unify_types(node.value.type, self.current_function_return[-1], at=get_loc(node.value))
+            self.subst.unify_types(
+                node.value.type,
+                self.current_function_return[-1],
+                at=get_loc(node.value),
+            )
         return node
 
     def visit_call(self, node):
@@ -234,8 +249,7 @@ class UnifyTypes(WormVisitor):
         # node.kwargs = {key: self.visit(arg) for key, arg in node.kwargs.items()}
 
         self.subst.unify_types(
-            make_function_type(node.type,
-                               *(e.type for e in node.args)),
+            make_function_type(node.type, *(e.type for e in node.args)),
             node.func.type,
             at=get_loc(node.func),
         )
@@ -243,30 +257,16 @@ class UnifyTypes(WormVisitor):
         return node
 
 
-class FunctionPrototype:
-    def __init__(self, returns, *args):
-        self.returns = returns
-        self.args = [arg for arg in args]
-
-    def check_return(self, ret):
-        return check_type(self.returns, ret)
-
-    def check_args(self, *args):
-        return all(check_type(ref, arg) for ref, arg in zip(self.args, args))
-
-
 class SubstitutionTable:
     def __init__(self):
         self.vars = {}
 
     def new_id(self):
-        """Return a new unique id
-        """
+        """Return a new unique id"""
         return object()
 
     def new_var(self):
-        """Return a fresh type variable
-        """
+        """Return a fresh type variable"""
         n = self.new_id()
         v = TypeVar(n)
         self.vars[n] = None
@@ -289,8 +289,7 @@ class SubstitutionTable:
         return var or prev
 
     def unify_types(self, type_a, type_b, at=None):
-        """Unify type_a and type_b or raise a WormTypeError
-        """
+        """Unify type_a and type_b or raise a WormTypeError"""
 
         ta, tb = self.resolve(type_a), self.resolve(type_b)
         if isinstance(ta, TypeVar):
@@ -316,20 +315,6 @@ class TypeVar:
 
     def __repr__(self):
         return f"<TypeVar {id(self.name)}>"
-
-
-class FunctionType:
-    def __init__(self, ret_type, args_types):
-        self.ret_type = ret_type
-        self.args_types = args_types
-
-
-def make_function_type(ret_type, *args_types):
-    return FunctionType(ret_type, args_types)
-
-
-def check_type(expected, observed):
-    pass
 
 
 def get_binary_op_type(op):
