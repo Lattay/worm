@@ -14,7 +14,7 @@ class WAst:
 
 
 class WTopLevel(WAst):
-    def __init__(self, *, entry=None, functions=(), headers=(), exported=(), **kwargs):
+    def __init__(self, *, entry, functions, headers, exported, **kwargs):
         super().__init__(**kwargs)
         self.entry = entry
         self.functions = dict(functions)
@@ -22,10 +22,6 @@ class WTopLevel(WAst):
         self.exported = set(exported)
 
     def copy_common(self, other):
-        if isinstance(other, WTopLevel):
-            self.functions = other.functions
-            self.exported = other.exported
-
         return super().copy_common(other)
 
 
@@ -205,7 +201,6 @@ class WAssign(WStatement):
         super().__init__(**kwargs)
         self.targets = list(targets)
 
-        # FIXME
         if len(self.targets) > 1:
             raise NotImplementedError(
                 "Multiple assignment target is not supported yet."

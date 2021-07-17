@@ -1,0 +1,22 @@
+"""#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+void f();
+void main(){
+f();
+}
+void f(){
+int64_t c = 5;
+}"""
+from worm import new_prog
+from worm.wtypes import void
+
+prog = new_prog()
+
+@prog
+def f() -> void:
+    c = 5
+
+@prog.entry
+def main():
+    f()

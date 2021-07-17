@@ -5,7 +5,8 @@ from .printf import parse_format
 
 class PrintfPrototype(FunctionType):
     def __init__(self):
-        self.returns = void
+        self.ret_type = void
+        self.args_types = [str]
 
     def check_args(self, format, *args):
         if not isinstance(format, WConstant) or format.type.deref() != str:

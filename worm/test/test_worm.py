@@ -21,6 +21,11 @@ def test_hygienic():
     assert __doc__ == prog.dump_source()
 
 
+def test_decl():
+    from .decl import prog, __doc__
+    assert __doc__ == prog.dump_source()
+
+
 def test_fib():
     from .fib import prog, __doc__
 

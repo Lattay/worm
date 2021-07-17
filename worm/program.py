@@ -51,7 +51,7 @@ class Program:
             UnsugarBlocks(metadata),
             UnsugarMultipleAssign(metadata),
             Renaming(metadata),
-            Debug(metadata),
+            # Debug(metadata),
             CollectRequiredSymbols(metadata),
             InjectExternalSymbols(metadata),
             IntroduceSymbolTypes(metadata),
@@ -65,7 +65,7 @@ class Program:
         ]
 
         def transform(node):
-            return reduce(lambda n, t: t.visit(n), pipeline, node)
+            return reduce(lambda n, v: v.visit(n), pipeline, node)
 
         top_level = WTopLevel(
             entry=self.entry_point,
@@ -225,8 +225,12 @@ class Renaming(WormVisitor):
 
         top_level = WTopLevel(
             entry=entry,
-            functions={name: self.visit(f) for name, f in node.functions.items()},
+            functions={
+                name: self.visit(f)
+                for name, f in node.functions.items()
+            },
             headers=node.headers,
+            exported=node.exported,
         ).copy_common(node)
 
         return top_level
@@ -258,10 +262,7 @@ class Renaming(WormVisitor):
         return final.copy_common(node)
 
     def visit_block(self, node):
-        if node.hygienic:
-            new_frame = self.major_frame
-        else:
-            new_frame = self.minor_frame
+        new_frame = self.major_frame if node.hygienic else self.minor_frame
         with new_frame():
             prelude = []
             for local_name, ext_val in node.injected.items():
@@ -302,7 +303,6 @@ class Renaming(WormVisitor):
             declaration = True
         n = WStoreName(renamed).copy_common(node)
         n.declaration = declaration
-        print(n, n.declaration)
         return n
 
 
@@ -373,13 +373,10 @@ class MakeCSource(WormVisitor):
     def visit_topLevel(self, node):
         code = node.headers
 
-        print("Required types")
         for t in self.types:
             pass
             # code.append(t.declaration(to_c_type))
-        print(self.types)
 
-        print("Required symbols")
         for k, f in self.required.items():
             if isinstance(f, WFuncDef):
                 proto = f.prototype
@@ -388,6 +385,7 @@ class MakeCSource(WormVisitor):
                     to_c_type(proto["return"]) + f' {proto["name"]}({arg_list});'
                 )
             else:
+                # FIXME DEBUG
                 print(k, f)
 
         if node.entry is not None:
@@ -561,6 +559,4 @@ class MetaDataStorage:
 
 
 class Debug(WormVisitor):
-    def visit_storeName(self, node):
-        print(node, node.declaration)
-        return node
+    pass

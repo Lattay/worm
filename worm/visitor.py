@@ -49,6 +49,7 @@ class WormVisitor:
             entry=self.visit(node.entry),
             functions={name: self.visit(f) for name, f in node.functions.items()},
             headers=node.headers,
+            exported=node.exported,
         ).copy_common(node)
 
     def visit_constant(self, node):

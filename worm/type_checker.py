@@ -18,6 +18,10 @@ class IntroduceSymbolTypes(WormVisitor):
         node.type = self.get_type_from_name(node.name)
         return super().visit_storeName(node)
 
+    def visit_funcDef(self, node):
+        node.type = self.get_type_from_name(node.name)
+        return super().visit_funcDef(node)
+
     def get_type_from_name(self, name):
         if name in self.scope:
             return self.scope[name]
@@ -248,6 +252,8 @@ class UnifyTypes(WormVisitor):
         node.args = list(map(self.visit, node.args))
         # node.kwargs = {key: self.visit(arg) for key, arg in node.kwargs.items()}
 
+        # assert False, f"{node.func}, {self.subst.resolve(node.func.type)}"
+
         self.subst.unify_types(
             make_function_type(node.type, *(e.type for e in node.args)),
             node.func.type,
@@ -272,7 +278,7 @@ class SubstitutionTable:
         self.vars[n] = None
         return v
 
-    def resolve(self, var):
+    def resolve(self, var, at=None):
         """Get the best representation of the type corresponding to var.
 
         Loop over the dependency chain of type variables until it reach either None
@@ -286,12 +292,16 @@ class SubstitutionTable:
             prev = var
             var = self.vars[var.name]
 
+        if isinstance(var, WName):
+            raise WormTypeError("Unexpected type name", at=at)
+            return from_name(var.name)
+
         return var or prev
 
     def unify_types(self, type_a, type_b, at=None):
         """Unify type_a and type_b or raise a WormTypeError"""
 
-        ta, tb = self.resolve(type_a), self.resolve(type_b)
+        ta, tb = self.resolve(type_a, at=at), self.resolve(type_b, at=at)
         if isinstance(ta, TypeVar):
             self.vars[ta.name] = tb
         elif isinstance(tb, TypeVar):
@@ -306,7 +316,7 @@ class SubstitutionTable:
                 # FIXME consider function polymorphism
                 self.unify_types(a, b, at=at)
         else:
-            raise WormTypeError("Could not unify these types", ta, tb)
+            raise WormTypeError("Could not unify these types", ta, tb, at=at)
 
 
 class TypeVar:
