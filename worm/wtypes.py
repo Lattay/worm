@@ -52,6 +52,9 @@ class FunctionType(WormType):
         self.ret_type = ret_type
         self.args_types = args_types
 
+    def __repr__(self):
+        return f"FunctionType({self.ret_type!r}, {self.args_types!r})"
+
 
 def make_function_type(ret_type, *args_types):
     return FunctionType(ret_type, args_types)

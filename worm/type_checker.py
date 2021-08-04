@@ -5,6 +5,12 @@ from .wast import WName, WStoreName
 
 
 class IntroduceSymbolTypes(WormVisitor):
+    """Annotate each symbol with its known type.
+
+    If any or a fresh type variable that will be shared with all instances of
+    that symbol.
+    """
+
     def __init__(self, metadata):
         self.scope = metadata.scope
         self.symbol_table = metadata.symbol_table
@@ -24,13 +30,30 @@ class IntroduceSymbolTypes(WormVisitor):
 
     def get_type_from_name(self, name):
         if name in self.scope:
+            if self.scope[name] is None:
+                self.scope[name] = self.subst.new_var()
             return self.scope[name]
         elif name not in self.symbol_table:
             self.symbol_table[name] = self.subst.new_var()
         return self.symbol_table[name]
 
 
+class ValidateMain(WormVisitor):
+    """Ensure the main function has a valid prototype.
+    """
+    def visit_topLevel(self, node):
+        if node.entry is not None:
+            if node.entry.returns is None:
+                node.entry.type = make_function_type(void)
+            else:
+                node.entry.type = make_function_type(int)
+        return node
+
+
 class AnnotateWithTypes(WormVisitor):
+    """Resolve primitive named types and add type variable everywhere no type have been set before.
+    """
+
     def __init__(self, metadata):
         self.subst = metadata.subst
 
@@ -57,54 +80,8 @@ class AnnotateWithTypes(WormVisitor):
             return type_
 
 
-class FlattenTypes(WormVisitor):
-    def __init__(self, metadata):
-        self.subst = metadata.subst
-
-    def visit(self, node):
-        if node is None:
-            return None
-        if self.subst is not None and node.type is not None:
-            type_ = self.treat_type(node.type)
-            if not type_:
-                raise WormTypeInferenceError(
-                    f"Dangling type var for {node}", at=get_loc(node)
-                )
-            node.type = type_
-        return super().visit(node)
-
-    def visit_funcDef(self, node):
-        node.returns = self.treat_type(node.returns)
-        if not node.returns:
-            raise WormTypeInferenceError(
-                f"Dangling type var for return type of {node.name}", at=get_loc(node)
-            )
-        return super().visit_funcDef(node)
-
-    def treat_type(self, type_):
-        if isinstance(type_, TypeVar):
-            res = self.subst.resolve(type_)
-            if isinstance(res, TypeVar):
-                return None
-            else:
-                return res
-        else:
-            return type_
-
-
-class ValidateMain(WormVisitor):
-    def visit_topLevel(self, node):
-        if node.entry is not None:
-            if node.entry.returns is None:
-                node.entry.type = make_function_type(void)
-            else:
-                node.entry.type = make_function_type(int)
-        return node
-
-
 class UnifyTypes(WormVisitor):
-    """
-    This visitor will apply the relations between node types
+    """This visitor will use the relations between nodes to unify types.
     """
 
     def __init__(self, metadata):
@@ -254,26 +231,75 @@ class UnifyTypes(WormVisitor):
 
         # assert False, f"{node.func}, {self.subst.resolve(node.func.type)}"
 
+        t1 = make_function_type(node.type, *(e.type for e in node.args))
+        t2 = node.func.type
+
         self.subst.unify_types(
-            make_function_type(node.type, *(e.type for e in node.args)),
-            node.func.type,
+            t1,
+            t2,
             at=get_loc(node.func),
         )
 
         return node
 
 
+class FlattenTypes(WormVisitor):
+    """Resolve all type variables
+
+    Replace them with their targeted types.
+    """
+
+    def __init__(self, metadata):
+        self.subst = metadata.subst
+
+    def visit(self, node):
+        if node is None:
+            return None
+        if self.subst is not None:
+            type_ = self.treat_type(node.type, at=get_loc(node))
+            if not type_:
+                raise WormTypeInferenceError(
+                    f"Dangling type var for {node}", at=get_loc(node)
+                )
+            node.type = type_
+        return super().visit(node)
+
+    def visit_funcDef(self, node):
+        node.returns = self.treat_type(node.returns, at=get_loc(node))
+        if not node.returns:
+            raise WormTypeInferenceError(
+                f"Dangling type var for return type of {node.name}", at=get_loc(node)
+            )
+        return super().visit_funcDef(node)
+
+    def treat_type(self, type_, at=None):
+        if isinstance(type_, TypeVar):
+            res = self.subst.resolve(type_)
+            if isinstance(res, TypeVar):
+                return None
+            else:
+                return res
+        elif type_ is None:
+            raise WormTypeInferenceError("Unexpected None type.", at=at)
+        else:
+            return type_
+
+
 class SubstitutionTable:
+    """Table to resolve types.
+
+    It stores type variables and is able to unify unresolved types.
+    """
     def __init__(self):
         self.vars = {}
 
-    def new_id(self):
+    def _new_id(self):
         """Return a new unique id"""
         return object()
 
     def new_var(self):
         """Return a fresh type variable"""
-        n = self.new_id()
+        n = self._new_id()
         v = TypeVar(n)
         self.vars[n] = None
         return v

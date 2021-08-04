@@ -26,6 +26,11 @@ def test_decl():
     assert __doc__ == prog.dump_source()
 
 
+def test_infer_return():
+    from .infer_return import prog, __doc__
+    assert __doc__ == prog.dump_source()
+
+
 def test_fib():
     from .fib import prog, __doc__
 
